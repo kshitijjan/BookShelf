@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-cream: #f7f4ed;
+    --text-charcoal: #1c1c1c;
+    --border-cream: #eceae4;
+    --charcoal-83: rgba(28, 28, 28, 0.83);
+    --charcoal-82: rgba(28, 28, 28, 0.82);
+    --charcoal-40: rgba(28, 28, 28, 0.4);
+    --charcoal-04: rgba(28, 28, 28, 0.04);
+    --charcoal-03: rgba(28, 28, 28, 0.03);
+    --ring-blue: rgba(59, 130, 246, 0.5);
+  }
+
+  body {
+    background-color: var(--bg-cream);
+    color: var(--text-charcoal);
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* Editorial typography classes */
+  h1, h2, h3, .font-editorial {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.025em;
+  }
+
+  .font-serif-quote {
+    font-family: 'Newsreader', Georgia, Cambria, serif;
+  }
+}
+
+/* Tactile Parchment Paper Texture */
+.parchment-texture {
+  background-color: #f7f4ed;
+  background-image: 
+    radial-gradient(circle at 15% 15%, rgba(28, 28, 28, 0.015) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(28, 28, 28, 0.012) 0%, transparent 40%);
+}
+
+/* Book Spine Shadow - Left Edge of Page */
+.book-spine-left {
+  box-shadow: inset 18px 0 24px -14px rgba(28, 28, 28, 0.08),
+              inset 2px 0 6px -2px rgba(28, 28, 28, 0.04);
+}
+
+/* Subtle Deckle Edge / Layered Sheets on Right Edge */
+.book-edge-sheets {
+  box-shadow: 
+    3px 0 0 0 #f0ede5,
+    4px 0 0 0 #e8e4db,
+    7px 0 8px -3px rgba(28, 28, 28, 0.06);
+}
+
+/* Lovable Inset Shadow Button Style */
+.shadow-button-inset {
+  box-shadow: rgba(255, 255, 255, 0.2) 0px 0.5px 0px 0px inset,
+              rgba(0, 0, 0, 0.2) 0px 0px 0px 0.5px inset,
+              rgba(0, 0, 0, 0.05) 0px 1px 2px 0px;
+}
+
+/* Focus Glow */
+.focus-warm:focus-visible {
+  outline: none;
+  box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px;
+}
+
+/* 3D Page Turn Container */
+.book-perspective {
+  perspective: 2200px;
+  perspective-origin: center;
+}
+
+.book-page-3d {
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+}
+
+/* Page Corner Curl on Hover */
+.page-corner-curl {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, transparent 50%, rgba(28, 28, 28, 0.08) 50%, rgba(28, 28, 28, 0.02) 65%, transparent 70%);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.page-corner-curl:hover {
+  transform: scale(1.3) translate(-4px, -4px);
+}
+
+/* Custom Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(28, 28, 28, 0.25) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(28, 28, 28, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(28, 28, 28, 0.38);
+}
+
+/* Modal scrollable track: perfectly aligned & inset from top and bottom rounded curves */
+.modal-scrollable::-webkit-scrollbar-track {
+  margin-top: 14px;
+  margin-bottom: 14px;
+  background: transparent;
+}
+
+.modal-scrollable::-webkit-scrollbar {
+  width: 5px;
+}

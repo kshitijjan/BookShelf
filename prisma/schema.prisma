@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+model Profile {
+  id               String   @id @default(uuid())
+  clerkId          String   @unique
+  email            String   @unique
+  firstName        String   @default("")
+  lastName         String   @default("")
+  scholarlyRank    String   @default("")
+  personalities    String[] @default([])
+  selectedGenres   String[] @default([])
+  tasteProfile     String   @default("")
+  memberSince      String   @default("")
+  challengeGoal    Int      @default(12)
+  booksRead        Int      @default(0)
+  pagesRead        Int      @default(0)
+  marginNotesCount Int      @default(0)
+  guildsJoined     Int      @default(0)
+  isOnboarded      Boolean  @default(false)
+  bookmarks        String[] @default([])
+  shelfBooks       Json?    @default("[]")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model DailyCatalog {
+  id        String   @id @default(uuid())
+  dateKey   String   @unique // e.g. "2026-10-12"
+  booksJson Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MarginNote {
+  id             String   @id @default(uuid())
+  bookTitle      String
+  bookAuthor     String?  @default("Archived Writer")
+  passageSnippet String
+  noteText       String
+  pageNumber     Int?     @default(1)
+  readerName     String   @default("Anonymous Reader")
+  readerHandle   String?  @default("@reader")
+  readerAvatar   String?  @default("")
+  userId         String?
+  likes          Int      @default(0)
+  likedBy        String[] @default([])
+  comments       Json?    @default("[]")
+  isTopPick      Boolean  @default(false)
+  timestamp      String?  @default("Just now")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
