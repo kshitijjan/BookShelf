@@ -57,11 +57,6 @@ export const HomePage: React.FC<HomePageProps> = ({
     onPageChange(chapterNum - 1);
   };
 
-  const handleSearchPrompt = (query: string) => {
-    scrollToChapter(3);
-    console.log('Searching for vibe:', query);
-  };
-
   return (
     <>
       {/* Vertically stacked chapters flow with identical page styling */}
@@ -69,7 +64,9 @@ export const HomePage: React.FC<HomePageProps> = ({
         <section id="chapter-1" className="scroll-mt-20">
           <Chapter1Hero
             onNextPage={() => scrollToChapter(2)}
-            onSearchPrompt={handleSearchPrompt}
+            onSelectBook={setSelectedBook}
+            bookmarkedIds={bookmarkedIds}
+            onToggleBookmark={onToggleBookmark}
           />
         </section>
 

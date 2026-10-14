@@ -1,19 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, ArrowRight, BookMarked, Search, ArrowUpRight, Quote, Library, MessageSquare, Feather } from 'lucide-react';
+import { Sparkles, ArrowRight, BookMarked, Search, ArrowUpRight, Quote, Library, MessageSquare, Feather, Loader2 } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { Book } from '../../types/book';
 import { soundManager } from '../../utils/sound';
+import { consultArchivist, ArchivistResult } from '../../utils/archivistEngine';
+import { ArchivistsReadingDesk } from './ArchivistsReadingDesk';
 
 interface Chapter1HeroProps {
   onNextPage: () => void;
-  onSearchPrompt: (query: string) => void;
+  onSearchPrompt?: (query: string) => void;
+  onSelectBook: (book: Book) => void;
+  bookmarkedIds: string[];
+  onToggleBookmark: (bookId: string) => void;
 }
 
 export const Chapter1Hero: React.FC<Chapter1HeroProps> = ({
   onNextPage,
   onSearchPrompt,
+  onSelectBook,
+  bookmarkedIds,
+  onToggleBookmark,
 }) => {
   const [promptInput, setPromptInput] = useState('');
+  const [isConsulting, setIsConsulting] = useState(false);
+  const [archivistResult, setArchivistResult] = useState<ArchivistResult | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const suggestionPills = [
     'Poetic sci-fi like Ted Chiang',
@@ -22,20 +34,36 @@ export const Chapter1Hero: React.FC<Chapter1HeroProps> = ({
     'Quiet melancholy to heal a restless soul',
   ];
 
+  const executeConsultation = (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+
+    setIsConsulting(true);
+    soundManager.playPageTurn();
+
+    setTimeout(() => {
+      const result = consultArchivist(trimmed);
+      setArchivistResult(result);
+      setIsConsulting(false);
+      soundManager.playPageTurn();
+      if (onSearchPrompt) onSearchPrompt(trimmed);
+    }, 400);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (promptInput.trim()) {
-      onSearchPrompt(promptInput.trim());
-      soundManager.playPageTurn();
-      onNextPage();
-    }
+    executeConsultation(promptInput);
   };
 
   const handlePillClick = (pill: string) => {
     setPromptInput(pill);
-    onSearchPrompt(pill);
-    soundManager.playPageTurn();
-    onNextPage();
+    executeConsultation(pill);
+  };
+
+  const handleResetQuery = () => {
+    setPromptInput('');
+    setArchivistResult(null);
+    inputRef.current?.focus();
   };
 
   return (
@@ -120,6 +148,7 @@ export const Chapter1Hero: React.FC<Chapter1HeroProps> = ({
             <div className="flex items-center gap-2 px-2">
               <Search className="w-5 h-5 text-[#5f5f5d] shrink-0" />
               <input
+                ref={inputRef}
                 type="text"
                 value={promptInput}
                 onChange={(e) => setPromptInput(e.target.value)}
@@ -130,11 +159,22 @@ export const Chapter1Hero: React.FC<Chapter1HeroProps> = ({
                 type="submit"
                 variant="primary"
                 size="md"
-                className="shrink-0 gap-1.5 shadow-button-inset"
+                disabled={isConsulting}
+                className="shrink-0 gap-1.5 shadow-button-inset disabled:opacity-80"
               >
-                <Sparkles className="w-4 h-4" />
-                <span className="hidden sm:inline">Consult Archivist</span>
-                <span className="sm:hidden">Find</span>
+                {isConsulting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#d4af37]" />
+                    <span className="hidden sm:inline">Consulting Archives...</span>
+                    <span className="sm:hidden">Consulting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span className="hidden sm:inline">Consult Archivist</span>
+                    <span className="sm:hidden">Find</span>
+                  </>
+                )}
               </Button>
             </div>
 
@@ -148,13 +188,26 @@ export const Chapter1Hero: React.FC<Chapter1HeroProps> = ({
                   key={pill}
                   type="button"
                   onClick={() => handlePillClick(pill)}
-                  className="text-[12px] text-[rgba(28,28,28,0.82)] bg-[#f7f4ed] hover:bg-[#eceae4] border border-[#eceae4] px-2.5 py-1 rounded-full transition-colors active:opacity-80"
+                  disabled={isConsulting}
+                  className="text-[12px] text-[rgba(28,28,28,0.82)] bg-[#f7f4ed] hover:bg-[#eceae4] border border-[#eceae4] px-2.5 py-1 rounded-full transition-colors active:opacity-80 disabled:opacity-50"
                 >
                   {pill}
                 </button>
               ))}
             </div>
           </form>
+
+          {/* The Archivist's Reading Desk (In-Place Reveal) */}
+          {archivistResult && (
+            <ArchivistsReadingDesk
+              result={archivistResult}
+              onClose={() => setArchivistResult(null)}
+              onSelectBook={onSelectBook}
+              bookmarkedIds={bookmarkedIds}
+              onToggleBookmark={onToggleBookmark}
+              onResetQuery={handleResetQuery}
+            />
+          )}
         </div>
       </div>
 
