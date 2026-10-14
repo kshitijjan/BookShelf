@@ -31,12 +31,24 @@ const GRADIENTS = [
   'from-[#8c5e43] via-[#65432f] to-[#3f291c]',
 ];
 
+// 24-hour in-memory cache to conserve Google Gemini free tier quota and prevent unnecessary API calls
+const queryCache = new Map<string, { timestamp: number; response: ArchivistAiResponse }>();
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Calls an LLM (Gemini, OpenAI, or Groq) if keys are present in process.env,
  * otherwise utilizes intelligent Open Library situational search.
  */
 export async function getArchivistAiRecommendations(rawQuery: string): Promise<ArchivistAiResponse> {
   const query = rawQuery.trim();
+  const normalizedKey = query.toLowerCase();
+
+  const cached = queryCache.get(normalizedKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    console.log('[ArchivistAI] Serving from cache (0 API cost, 0 quota consumed):', query);
+    return cached.response;
+  }
+
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
   const groqKey = process.env.GROQ_API_KEY;
@@ -97,12 +109,19 @@ export async function getArchivistAiRecommendations(rawQuery: string): Promise<A
     });
   }
 
-  return {
+  const response: ArchivistAiResponse = {
     query,
     source,
     letter: llmResult.letter,
     recommendations: enrichedRecommendations,
   };
+
+  queryCache.set(normalizedKey, {
+    timestamp: Date.now(),
+    response,
+  });
+
+  return response;
 }
 
 /**
