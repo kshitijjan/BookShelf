@@ -131,34 +131,46 @@ Return ONLY a valid JSON object matching this structure:
   ]
 }`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: `${systemPrompt}\n\nReader's Inquiry: "${query}"` }],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.7,
-      },
-    }),
-  });
+  const models = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
 
-  if (!res.ok) {
-    const errorBody = await res.text();
-    throw new Error(`Gemini API error HTTP ${res.status}: ${errorBody}`);
+  for (const model of models) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: `${systemPrompt}\n\nReader's Inquiry: "${query}"` }],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.7,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        continue;
+      }
+
+      const data = await res.json();
+      let text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) continue;
+
+      // Clean any accidental markdown code fences
+      text = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+      return JSON.parse(text);
+    } catch {
+      continue;
+    }
   }
 
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) return null;
-
-  return JSON.parse(text);
+  return null;
 }
 
 /**
