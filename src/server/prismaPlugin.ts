@@ -12,6 +12,7 @@ import {
   getTopMarginNotes,
   getAllMarginNotes,
 } from './marginNotesService';
+import { getArchivistAiRecommendations } from './archivistAiService';
 
 
 declare const process: any;
@@ -354,6 +355,30 @@ export function prismaApiPlugin(): Plugin {
           } catch (err: any) {
             res.statusCode = 502;
             res.end('Proxy fetch failed');
+          }
+          return;
+        }
+
+        // POST /api/archivist/consult (AI-powered situational recommendation with Open Library live enrichment)
+        if (url.pathname === '/api/archivist/consult' && req.method === 'POST') {
+          try {
+            const body = await parseJsonBody(req);
+            const query = body?.query;
+            if (!query || typeof query !== 'string' || !query.trim()) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: 'Query is required' }));
+              return;
+            }
+
+            const result = await getArchivistAiRecommendations(query.trim());
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(result));
+          } catch (err: any) {
+            console.error('[API /api/archivist/consult] Error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Archivist consultation failed', details: err?.message }));
           }
           return;
         }

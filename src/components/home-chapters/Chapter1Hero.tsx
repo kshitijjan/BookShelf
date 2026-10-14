@@ -34,20 +34,43 @@ export const Chapter1Hero: React.FC<Chapter1HeroProps> = ({
     'Quiet melancholy to heal a restless soul',
   ];
 
-  const executeConsultation = (query: string) => {
+  const executeConsultation = async (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
 
     setIsConsulting(true);
     soundManager.playPageTurn();
 
-    setTimeout(() => {
-      const result = consultArchivist(trimmed);
-      setArchivistResult(result);
+    try {
+      const res = await fetch('/api/archivist/consult', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: trimmed }),
+      });
+
+      if (!res.ok) throw new Error(`Consultation failed: ${res.status}`);
+      const data = await res.json();
+
+      if (data && data.recommendations && data.recommendations.length > 0) {
+        setArchivistResult({
+          query: data.query || trimmed,
+          letter: data.letter,
+          source: data.source,
+          recommendations: data.recommendations,
+        });
+      } else {
+        const fallback = consultArchivist(trimmed);
+        setArchivistResult(fallback);
+      }
+    } catch (err) {
+      console.warn('[Archivist] API consultation failed, using vault fallback:', err);
+      const fallback = consultArchivist(trimmed);
+      setArchivistResult(fallback);
+    } finally {
       setIsConsulting(false);
       soundManager.playPageTurn();
       if (onSearchPrompt) onSearchPrompt(trimmed);
-    }, 400);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {

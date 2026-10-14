@@ -10,6 +10,7 @@ export interface ArchivistRecommendation {
 export interface ArchivistResult {
   query: string;
   letter: string;
+  source?: 'gemini' | 'openai' | 'groq' | 'openlibrary_ai';
   recommendations: ArchivistRecommendation[];
 }
 

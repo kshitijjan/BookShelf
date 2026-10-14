@@ -48,8 +48,15 @@ export const ArchivistsReadingDesk: React.FC<ArchivistsReadingDeskProps> = ({
               <span className="font-serif-quote font-bold text-[#1c1c1c] text-[16px] sm:text-[17px] tracking-wide">
                 The Archivist’s Reading Desk
               </span>
-              <span className="text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-[#8c5e43]/10 text-[#8c5e43] border border-[#8c5e43]/20">
-                Live Accord
+              <span className="text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-[#8c5e43]/10 text-[#8c5e43] border border-[#8c5e43]/20 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-[#8c5e43]" />
+                {result.source === 'gemini'
+                  ? 'Gemini AI Accord'
+                  : result.source === 'openai'
+                  ? 'OpenAI Accord'
+                  : result.source === 'groq'
+                  ? 'Groq AI Accord'
+                  : 'Open Library Dynamic Discovery'}
               </span>
             </div>
             <p className="text-[12px] text-[#5f5f5d] font-mono mt-0.5">
@@ -190,7 +197,7 @@ export const ArchivistsReadingDesk: React.FC<ArchivistsReadingDeskProps> = ({
       {/* Desk Footer Ribbon */}
       <div className="mt-5 pt-3 border-t border-[#eceae4] flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] text-[#5f5f5d]">
         <span>
-          Retrieved from the 30-volume Sanctuary Vault. Select any volume to inspect margin reflections.
+          Discovered from millions of cataloged volumes in Open Library. Select any volume to inspect detailed margins.
         </span>
 
         <button
