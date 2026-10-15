@@ -1,14 +1,18 @@
-import { execSync } from 'child_process';
+import esbuild from 'esbuild';
 import fs from 'fs';
 import path from 'path';
 
-console.log('[build-api] Bundling src/server/vercelEntry.ts with esbuild...');
-execSync(
-  'npx esbuild src/server/vercelEntry.ts --bundle --platform=node --format=esm --external:@prisma/client --outfile=dist-api/bundle.js',
-  { stdio: 'inherit' }
-);
+console.log('[build-api] Bundling src/server/vercelEntry.ts with esbuild API...');
+const result = esbuild.buildSync({
+  entryPoints: ['src/server/vercelEntry.ts'],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  external: ['@prisma/client'],
+  write: false,
+});
 
-const bundleContent = fs.readFileSync('dist-api/bundle.js', 'utf8');
+const bundleContent = result.outputFiles[0].text;
 
 const routes = [
   'api/[...path].js',
@@ -36,5 +40,4 @@ for (const route of routes) {
   fs.writeFileSync(route, bundleContent, 'utf8');
 }
 
-fs.rmSync('dist-api', { recursive: true, force: true });
 console.log(`[build-api] Successfully generated ${routes.length} self-contained Vercel serverless endpoints.`);
