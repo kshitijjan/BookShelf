@@ -3323,8 +3323,9 @@ async function handleApiRequest(req, res, defaultPath) {
   const rawUrl = matchedPath || req.url || "/";
   const parsedUrl = new URL(rawUrl, "http://localhost");
   let pathname = parsedUrl.pathname.replace(/\/$/, "") || "/";
-  if ((pathname === "/api" || pathname === "") && req.query?.path) {
-    const segments = Array.isArray(req.query.path) ? req.query.path.join("/") : req.query.path;
+  const queryPath = req.query?.path || parsedUrl.searchParams.get("path");
+  if ((pathname === "/api" || pathname === "") && queryPath) {
+    const segments = Array.isArray(queryPath) ? queryPath.join("/") : queryPath;
     pathname = `/api/${segments}`.replace(/\/$/, "");
   }
   if ((pathname === "/" || pathname === "/api" || !pathname.startsWith("/api")) && defaultPath) {

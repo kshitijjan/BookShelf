@@ -227,9 +227,10 @@ export async function handleApiRequest(req: any, res: any, defaultPath?: string)
   const parsedUrl = new URL(rawUrl, 'http://localhost');
   let pathname = parsedUrl.pathname.replace(/\/$/, '') || '/';
 
-  // Support Vercel catch-all [...path] routing where req.query.path has the segments
-  if ((pathname === '/api' || pathname === '') && req.query?.path) {
-    const segments = Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path;
+  // Support Vercel catch-all and rewrite routing where path is passed in query (/api?path=...)
+  const queryPath = req.query?.path || parsedUrl.searchParams.get('path');
+  if ((pathname === '/api' || pathname === '') && queryPath) {
+    const segments = Array.isArray(queryPath) ? queryPath.join('/') : queryPath;
     pathname = `/api/${segments}`.replace(/\/$/, '');
   }
 
