@@ -84,6 +84,14 @@ export const CommunityPage: React.FC = () => {
         const notes = await fetchTopMarginNotes();
         if (!isCancelled) {
           setTopNotes(notes);
+          if (user?.email) {
+            const serverLiked = notes
+              .filter((n: any) => Array.isArray(n.likedBy) && n.likedBy.includes(user.email))
+              .map((n: any) => n.id);
+            if (serverLiked.length > 0) {
+              setLikedNoteIds((prev) => Array.from(new Set([...prev, ...serverLiked])));
+            }
+          }
         }
       } catch (err) {
         console.error('Failed to load top notes on community page:', err);
@@ -97,7 +105,7 @@ export const CommunityPage: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [user?.email]);
 
   const handleLike = async (id: string) => {
     soundManager.playBookmarkClick();
@@ -118,7 +126,12 @@ export const CommunityPage: React.FC = () => {
     );
 
     try {
-      await likeMarginNote(id, user?.email, !isCurrentlyLiked);
+      const res = await likeMarginNote(id, user?.email, !isCurrentlyLiked);
+      if (res && typeof res.likes === 'number') {
+        setTopNotes((prev) =>
+          prev.map((n) => (n.id === id ? { ...n, likes: res.likes } : n))
+        );
+      }
     } catch (err) {
       console.warn('Error liking note on community page:', err);
     }

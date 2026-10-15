@@ -66,6 +66,14 @@ export const CommunityExplorePage: React.FC = () => {
         sort: sortBy,
       });
       setNotes(data);
+      if (user?.email) {
+        const serverLiked = data
+          .filter((n: any) => Array.isArray(n.likedBy) && n.likedBy.includes(user.email))
+          .map((n: any) => n.id);
+        if (serverLiked.length > 0) {
+          setLikedNoteIds((prev) => Array.from(new Set([...prev, ...serverLiked])));
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch notes for explore page:', err);
     } finally {
@@ -75,7 +83,7 @@ export const CommunityExplorePage: React.FC = () => {
 
   useEffect(() => {
     loadAllNotes();
-  }, [selectedBookFilter, sortBy]);
+  }, [selectedBookFilter, sortBy, user?.email]);
 
   // Debounced search
   useEffect(() => {
@@ -104,7 +112,12 @@ export const CommunityExplorePage: React.FC = () => {
     );
 
     try {
-      await likeMarginNote(id, user?.email, !isCurrentlyLiked);
+      const res = await likeMarginNote(id, user?.email, !isCurrentlyLiked);
+      if (res && typeof res.likes === 'number') {
+        setNotes((prev) =>
+          prev.map((n) => (n.id === id ? { ...n, likes: res.likes } : n))
+        );
+      }
     } catch (err) {
       console.warn('Error liking note:', err);
     }

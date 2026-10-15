@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:api": "esbuild src/server/vercelEntry.ts --bundle --platform=node --format=esm --external:@prisma/client --outfile=api/[...path].js && cp api/[...path].js api/index.js",
+    "build:api": "node scripts/build-api.js",
     "build": "prisma generate && npm run build:api && tsc -b && vite build",
     "preview": "vite preview",
     "test:audit": "node scripts/verify-audit.js"

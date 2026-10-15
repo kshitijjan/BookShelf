@@ -127,9 +127,9 @@ export const INITIAL_MARGIN_NOTES = [
 
 let hasCheckedSeed = false;
 
-// In-memory cache for top margin notes (60s TTL)
+// In-memory cache for top margin notes (2s burst protection TTL)
 let topNotesCache: { timestamp: number; notes: any[] } | null = null;
-const TOP_NOTES_TTL_MS = 60 * 1000;
+const TOP_NOTES_TTL_MS = 2 * 1000;
 
 export function invalidateTopNotesCache() {
   topNotesCache = null;

@@ -221,8 +221,9 @@ function isAllowedCoverUrl(rawUrl: string): boolean {
  * Runs in Vite dev middleware, Vite preview, and Vercel serverless functions
  * Returns true if request was handled, false otherwise
  */
-export async function handleApiRequest(req: any, res: any): Promise<boolean> {
-  const rawUrl = req.url || '/';
+export async function handleApiRequest(req: any, res: any, defaultPath?: string): Promise<boolean> {
+  const matchedPath = req.headers?.['x-matched-path'] || req.headers?.['x-forwarded-uri'] || req.headers?.['x-original-url'];
+  const rawUrl = matchedPath || req.url || '/';
   const parsedUrl = new URL(rawUrl, 'http://localhost');
   let pathname = parsedUrl.pathname.replace(/\/$/, '') || '/';
 
@@ -232,6 +233,12 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     pathname = `/api/${segments}`.replace(/\/$/, '');
   }
 
+  // Fallback to defaultPath if provided (from a dedicated api lambda endpoint)
+  if ((pathname === '/' || pathname === '/api' || !pathname.startsWith('/api')) && defaultPath) {
+    pathname = defaultPath;
+  }
+
+  // Only handle /api endpoints; otherwise let Vite or static server handle SPA routes
   if (!pathname.startsWith('/api')) {
     return false;
   }
@@ -1035,6 +1042,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         }
 
         res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         res.end(JSON.stringify({ notes }));
       } catch (err: any) {
         console.error('Error fetching margin notes:', err);
@@ -1116,7 +1124,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     try {
       const db = getPrisma();
       const body = await parseJsonBody(req);
-      const { noteId, liked } = body;
+      const { noteId, userId, liked } = body;
 
       if (!noteId) {
         res.statusCode = 400;
@@ -1125,16 +1133,41 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         return true;
       }
 
+      const existing = await db.marginNote.findUnique({ where: { id: noteId } });
+      if (!existing) {
+        res.statusCode = 404;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Note not found' }));
+        return true;
+      }
+
+      let currentLikes = existing.likes || 0;
+      let likedBy = Array.isArray(existing.likedBy) ? [...existing.likedBy] : [];
+
+      if (liked === false) {
+        currentLikes = Math.max(0, currentLikes - 1);
+        if (userId) {
+          likedBy = likedBy.filter((u) => u !== userId);
+        }
+      } else {
+        currentLikes += 1;
+        if (userId && !likedBy.includes(userId)) {
+          likedBy.push(userId);
+        }
+      }
+
       const updatedNote = await db.marginNote.update({
         where: { id: noteId },
         data: {
-          likes: liked === false ? { decrement: 1 } : { increment: 1 },
+          likes: currentLikes,
+          likedBy,
         },
       });
 
       invalidateTopNotesCache();
 
       res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.end(JSON.stringify({ success: true, likes: updatedNote.likes, note: updatedNote }));
     } catch (err: any) {
       console.error('Error liking margin note:', err);
@@ -1183,7 +1216,10 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         data: { comments: currentComments },
       });
 
+      invalidateTopNotesCache();
+
       res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.end(JSON.stringify({ success: true, note: updated, comments: currentComments }));
     } catch (err: any) {
       console.error('Error adding comment:', err);

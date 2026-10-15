@@ -3,7 +3,9 @@ import { MARGIN_NOTES_DATA } from '../data/communityData';
 
 export async function fetchTopMarginNotes(): Promise<MarginNote[]> {
   try {
-    const res = await fetch('/api/margin-notes?top=true&limit=4');
+    const res = await fetch('/api/margin-notes?top=true&limit=4', {
+      cache: 'no-store',
+    });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.notes) && data.notes.length > 0) {
@@ -27,7 +29,9 @@ export async function fetchAllMarginNotes(params?: {
     if (params?.bookTitle && params.bookTitle !== 'All') query.set('bookTitle', params.bookTitle);
     if (params?.sort) query.set('sort', params.sort);
 
-    const res = await fetch(`/api/margin-notes?${query.toString()}`);
+    const res = await fetch(`/api/margin-notes?${query.toString()}`, {
+      cache: 'no-store',
+    });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.notes)) {

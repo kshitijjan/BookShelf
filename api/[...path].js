@@ -2612,7 +2612,7 @@ var INITIAL_MARGIN_NOTES = [
 ];
 var hasCheckedSeed = false;
 var topNotesCache = null;
-var TOP_NOTES_TTL_MS = 60 * 1e3;
+var TOP_NOTES_TTL_MS = 2 * 1e3;
 function invalidateTopNotesCache() {
   topNotesCache = null;
 }
@@ -3318,13 +3318,17 @@ function isAllowedCoverUrl(rawUrl) {
     return false;
   }
 }
-async function handleApiRequest(req, res) {
-  const rawUrl = req.url || "/";
+async function handleApiRequest(req, res, defaultPath) {
+  const matchedPath = req.headers?.["x-matched-path"] || req.headers?.["x-forwarded-uri"] || req.headers?.["x-original-url"];
+  const rawUrl = matchedPath || req.url || "/";
   const parsedUrl = new URL(rawUrl, "http://localhost");
   let pathname = parsedUrl.pathname.replace(/\/$/, "") || "/";
   if ((pathname === "/api" || pathname === "") && req.query?.path) {
     const segments = Array.isArray(req.query.path) ? req.query.path.join("/") : req.query.path;
     pathname = `/api/${segments}`.replace(/\/$/, "");
+  }
+  if ((pathname === "/" || pathname === "/api" || !pathname.startsWith("/api")) && defaultPath) {
+    pathname = defaultPath;
   }
   if (!pathname.startsWith("/api")) {
     return false;
@@ -4025,6 +4029,7 @@ async function handleApiRequest(req, res) {
           notes = await getAllMarginNotes(db, { search, bookTitle, sort });
         }
         res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
         res.end(JSON.stringify({ notes }));
       } catch (err) {
         console.error("Error fetching margin notes:", err);
@@ -4092,21 +4097,43 @@ async function handleApiRequest(req, res) {
     try {
       const db = getPrisma();
       const body = await parseJsonBody(req);
-      const { noteId, liked } = body;
+      const { noteId, userId, liked } = body;
       if (!noteId) {
         res.statusCode = 400;
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ error: "Missing noteId" }));
         return true;
       }
+      const existing = await db.marginNote.findUnique({ where: { id: noteId } });
+      if (!existing) {
+        res.statusCode = 404;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Note not found" }));
+        return true;
+      }
+      let currentLikes = existing.likes || 0;
+      let likedBy = Array.isArray(existing.likedBy) ? [...existing.likedBy] : [];
+      if (liked === false) {
+        currentLikes = Math.max(0, currentLikes - 1);
+        if (userId) {
+          likedBy = likedBy.filter((u) => u !== userId);
+        }
+      } else {
+        currentLikes += 1;
+        if (userId && !likedBy.includes(userId)) {
+          likedBy.push(userId);
+        }
+      }
       const updatedNote = await db.marginNote.update({
         where: { id: noteId },
         data: {
-          likes: liked === false ? { decrement: 1 } : { increment: 1 }
+          likes: currentLikes,
+          likedBy
         }
       });
       invalidateTopNotesCache();
       res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       res.end(JSON.stringify({ success: true, likes: updatedNote.likes, note: updatedNote }));
     } catch (err) {
       console.error("Error liking margin note:", err);
@@ -4147,7 +4174,9 @@ async function handleApiRequest(req, res) {
         where: { id: noteId },
         data: { comments: currentComments }
       });
+      invalidateTopNotesCache();
       res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       res.end(JSON.stringify({ success: true, note: updated, comments: currentComments }));
     } catch (err) {
       console.error("Error adding comment:", err);

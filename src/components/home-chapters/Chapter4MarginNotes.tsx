@@ -47,6 +47,14 @@ export const Chapter4MarginNotes: React.FC<Chapter4MarginNotesProps> = ({
         const topNotes = await fetchTopMarginNotes();
         if (!isCancelled) {
           setNotes(topNotes);
+          if (user?.email) {
+            const serverLiked = topNotes
+              .filter((n: any) => Array.isArray(n.likedBy) && n.likedBy.includes(user.email))
+              .map((n: any) => n.id);
+            if (serverLiked.length > 0) {
+              setLikedNoteIds((prev) => Array.from(new Set([...prev, ...serverLiked])));
+            }
+          }
         }
       } catch (err) {
         console.error('Error fetching top margin notes:', err);
@@ -60,7 +68,7 @@ export const Chapter4MarginNotes: React.FC<Chapter4MarginNotesProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [user?.email]);
 
   const handleLike = async (id: string) => {
     soundManager.playBookmarkClick();
@@ -83,7 +91,12 @@ export const Chapter4MarginNotes: React.FC<Chapter4MarginNotesProps> = ({
 
     // Sync to database
     try {
-      await likeMarginNote(id, user?.email, !isCurrentlyLiked);
+      const res = await likeMarginNote(id, user?.email, !isCurrentlyLiked);
+      if (res && typeof res.likes === 'number') {
+        setNotes((prevNotes) =>
+          prevNotes.map((n) => (n.id === id ? { ...n, likes: res.likes } : n))
+        );
+      }
     } catch (err) {
       console.warn('Failed to sync like to server:', err);
     }
