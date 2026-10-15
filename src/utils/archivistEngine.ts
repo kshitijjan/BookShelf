@@ -40,27 +40,35 @@ export function consultArchivist(rawQuery: string): ArchivistResult {
       .join(' ')
       .toLowerCase();
 
-    // 1. Direct query terms match
+    // 1. Direct query terms match using word boundaries
     const words = qLower.split(/[\s,.'"-]+/).filter((w) => w.length > 2);
     for (const word of words) {
-      if (searchableText.includes(word)) {
+      const boundaryRegex = new RegExp(`\\b${word}`, 'i');
+      if (boundaryRegex.test(searchableText)) {
         score += 3;
       }
-      if (book.title.toLowerCase().includes(word)) {
+      if (boundaryRegex.test(book.title)) {
         score += 6;
       }
-      if (book.author.toLowerCase().includes(word)) {
+      if (boundaryRegex.test(book.author)) {
         score += 5;
       }
-      if (book.genre.toLowerCase().includes(word)) {
-        score += 4;
-      }
-      if (book.moodTags?.some((tag) => tag.toLowerCase().includes(word))) {
+      if (boundaryRegex.test(book.genre)) {
         score += 5;
+      }
+      if (book.moodTags?.some((tag) => boundaryRegex.test(tag))) {
+        score += 6;
       }
     }
 
     // 2. Thematic motifs & emotional resonance detection
+    if (/romance|romantic|love|passion|intimacy|heart|longing|lover|dating|relationship|tender/i.test(qLower)) {
+      if (['Best Fiction', 'Top Classics'].includes(book.genre)) score += 9;
+      if (book.secondaryGenre?.toLowerCase().includes('romance') || book.secondaryGenre?.toLowerCase().includes('fiction')) score += 6;
+      if (book.moodTags?.some((t) => /emotional|poetic|melancholic|contemplation|resonance/i.test(t))) score += 7;
+      if (['Money & Investing', 'Startups & Entrepreneurship', 'Business & Leadership'].includes(book.genre)) score -= 15;
+    }
+
     if (/sci-fi|science|future|ai|tech|ted chiang|machine|digital/i.test(qLower)) {
       if (['Tech & AI', 'Best Fiction'].includes(book.genre)) score += 6;
       if (book.secondaryGenre?.toLowerCase().includes('ai') || book.secondaryGenre?.toLowerCase().includes('technology')) score += 5;
@@ -69,17 +77,20 @@ export function consultArchivist(rawQuery: string): ArchivistResult {
     if (/rain|rainy|jimbocho|bookstore|quiet|peace|calm|cozy|autumn|afternoon/i.test(qLower)) {
       if (book.moodTags?.some((t) => /quiet|contemplation|poetic|philosophical/i.test(t))) score += 7;
       if (['Philosophy', 'Top Classics', 'Best Fiction'].includes(book.genre)) score += 4;
+      if (['Money & Investing', 'Startups & Entrepreneurship'].includes(book.genre)) score -= 10;
     }
 
     if (/mystery|barcelona|puzzle|gothic|labyrinth|detective|shadow|secret/i.test(qLower)) {
       if (book.moodTags?.some((t) => /labyrinth|intellectual/i.test(t))) score += 7;
       if (book.secondaryGenre?.toLowerCase().includes('gothic') || book.secondaryGenre?.toLowerCase().includes('magical')) score += 6;
       if (book.title.includes('Solitude') || book.title.includes('Mockingbird') || book.title.includes('Midnight')) score += 5;
+      if (['Money & Investing', 'Startups & Entrepreneurship'].includes(book.genre)) score -= 10;
     }
 
     if (/melancholy|heal|restless|soul|grief|sorrow|solace|lonely|heart|ache/i.test(qLower)) {
       if (book.moodTags?.some((t) => /melancholic|solace|solitude|resonance|contemplation/i.test(t))) score += 8;
       if (book.title.includes('Solitude') || book.title.includes('Beloved') || book.title.includes('Courage')) score += 6;
+      if (['Money & Investing', 'Startups & Entrepreneurship'].includes(book.genre)) score -= 15;
     }
 
     if (/habit|discipline|growth|routine|focus|procrastinat|better|improve|lazy/i.test(qLower)) {
@@ -88,11 +99,11 @@ export function consultArchivist(rawQuery: string): ArchivistResult {
     }
 
     if (/money|rich|invest|wealth|market|stock|finance|capital/i.test(qLower)) {
-      if (book.genre === 'Money & Finance' || book.genre.includes('Investing')) score += 8;
+      if (book.genre === 'Money & Investing') score += 10;
     }
 
     if (/startup|entrepreneur|business|lead|founder|company|scale/i.test(qLower)) {
-      if (book.genre.includes('Business') || book.genre.includes('Startup')) score += 8;
+      if (['Startups & Entrepreneurship', 'Business & Leadership'].includes(book.genre)) score += 10;
     }
 
     if (/meaning|philosophy|exist|absurd|life|death|why|truth/i.test(qLower)) {
