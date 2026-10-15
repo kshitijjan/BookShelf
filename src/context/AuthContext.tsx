@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useUser as useClerkUser, useClerk } from '@clerk/clerk-react';
+import { useUser as useClerkUser, useClerk, useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { UserProfile, UserShelfBook } from '../types/user';
 import { Book } from '../types/book';
 import { generateTasteProfile } from '../utils/tasteProfile';
@@ -36,6 +36,20 @@ const getInitialMonthYear = (): string => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isLoaded, isSignedIn, user: clerkUser } = useClerkUser();
   const clerk = useClerk();
+  const { getToken } = useClerkAuth();
+
+  const getAuthHeaders = async (includeJson: boolean = false): Promise<Record<string, string>> => {
+    const headers: Record<string, string> = includeJson ? { 'Content-Type': 'application/json' } : {};
+    try {
+      const token = await getToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch {
+      // ignore
+    }
+    return headers;
+  };
 
   const [user, setUser] = useState<UserProfile | null>(() => {
     try {
@@ -76,7 +90,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (clerkId) params.set('clerkId', clerkId);
         if (email) params.set('email', email);
 
-        const res = await fetch(`/api/profile?${params.toString()}`);
+        const authHeaders = await getAuthHeaders();
+        const res = await fetch(`/api/profile?${params.toString()}`, { headers: authHeaders });
         if (res.ok) {
           const data = await res.json();
           if (data.profile && isCancelled === false) {
@@ -239,11 +254,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...updatedProfile,
       };
 
+      const headers = await getAuthHeaders(true);
       await fetch('/api/profile', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(payload),
       });
     } catch (err) {
@@ -282,9 +296,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
 
     try {
+      const headers = await getAuthHeaders(true);
       await fetch('/api/profile/shelf', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           clerkId: clerkUser?.id || user.email,
           email: user.email,
@@ -321,9 +336,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
 
     try {
+      const headers = await getAuthHeaders(true);
       await fetch('/api/profile/shelf', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           clerkId: clerkUser?.id || user.email,
           email: user.email,
@@ -361,9 +377,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const clerkId = clerkUser?.id || user.email;
+      const headers = await getAuthHeaders(true);
       await fetch('/api/profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           clerkId,
           email: user.email,

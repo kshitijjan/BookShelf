@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-14T21:28:04.317Z",
+  "timestamp": "2026-10-15T17:09:14.672Z",
   "baseUrl": "http://localhost:5173",
   "summary": {
     "total": 15,
@@ -12,7 +12,7 @@
       "suite": "Primary Routes",
       "name": "Route / (Home Page (Chapters I - V)) returns HTTP 200 with HTML",
       "status": "PASS",
-      "durationMs": 139.00970800000005,
+      "durationMs": 6.10270899999999,
       "details": {
         "status": 200,
         "bytes": 1499
@@ -22,7 +22,7 @@
       "suite": "Primary Routes",
       "name": "Route /books (Catalog Search & Browse Page) returns HTTP 200 with HTML",
       "status": "PASS",
-      "durationMs": 10.791958000000022,
+      "durationMs": 24.77345800000002,
       "details": {
         "status": 200,
         "bytes": 1499
@@ -32,7 +32,7 @@
       "suite": "Primary Routes",
       "name": "Route /shelf (Personal Reader Shelf Page) returns HTTP 200 with HTML",
       "status": "PASS",
-      "durationMs": 123.42220800000018,
+      "durationMs": 106.082708,
       "details": {
         "status": 200,
         "bytes": 1499
@@ -42,7 +42,7 @@
       "suite": "Primary Routes",
       "name": "Route /profile (Reader Sanctuary Profile Page) returns HTTP 200 with HTML",
       "status": "PASS",
-      "durationMs": 233.67787500000009,
+      "durationMs": 59.62816699999999,
       "details": {
         "status": 200,
         "bytes": 1499
@@ -52,7 +52,7 @@
       "suite": "Core API",
       "name": "GET /api/books/daily returns structured catalog with books array",
       "status": "PASS",
-      "durationMs": 1539.7676250000002,
+      "durationMs": 2356.2575,
       "details": {
         "bookCount": 30,
         "dateKey": "2026-10-15"
@@ -62,7 +62,7 @@
       "suite": "Core API",
       "name": "GET /api/margin-notes returns community notes list",
       "status": "PASS",
-      "durationMs": 1117.4254589999996,
+      "durationMs": 1042.955708,
       "details": {
         "noteCount": 50
       }
@@ -71,7 +71,7 @@
       "suite": "Core API",
       "name": "GET /api/cover-proxy with valid cover URL streams image asset",
       "status": "PASS",
-      "durationMs": 3310.2631250000004,
+      "durationMs": 3210.3610419999995,
       "details": {
         "contentType": "image/jpeg",
         "bytes": 5596
@@ -81,20 +81,20 @@
       "suite": "Core API",
       "name": "POST /api/archivist/consult returns 3 recommendations and cached property",
       "status": "PASS",
-      "durationMs": 19278.596792,
+      "durationMs": 5026.133374999999,
       "details": {
         "recommendationsCount": 3,
         "cached": false,
-        "source": "openlibrary_ai"
+        "source": "gemini"
       }
     },
     {
       "suite": "Margin Notes",
       "name": "POST /api/margin-notes succeeds with { bookTitle, bookAuthor, noteText } without page numbers",
       "status": "PASS",
-      "durationMs": 823.9908329999998,
+      "durationMs": 514.2210830000004,
       "details": {
-        "noteId": "72578b8f-8b2b-48f0-a244-742128b75f98",
+        "noteId": "cda2c04c-ebe9-4d12-a14f-32660db14978",
         "title": "Meditations of Aurelius"
       }
     },
@@ -102,7 +102,7 @@
       "suite": "Margin Notes",
       "name": "POST /api/margin-notes with empty payload returns HTTP 400",
       "status": "PASS",
-      "durationMs": 1.8061669999988226,
+      "durationMs": 1.2284579999995913,
       "details": {
         "status": 400
       }
@@ -111,9 +111,9 @@
       "suite": "Cover Proxy",
       "name": "GET /api/cover-proxy with failing upstream URL returns high-fidelity parchment SVG placeholder (not plain text 502/404)",
       "status": "PASS",
-      "durationMs": 65.67083300000013,
+      "durationMs": 0.7995410000003176,
       "details": {
-        "status": 200,
+        "status": 400,
         "contentType": "image/svg+xml",
         "isSvgPlaceholder": true
       }
@@ -122,7 +122,7 @@
       "suite": "Cover Proxy",
       "name": "GET /api/cover-proxy without url parameter returns HTTP 400",
       "status": "PASS",
-      "durationMs": 0.7509169999975711,
+      "durationMs": 0.9972920000000158,
       "details": {
         "status": 400
       }
@@ -131,9 +131,9 @@
       "suite": "Cache Benchmark",
       "name": "Repeat POST /api/archivist/consult resolves in < 20ms with cached === true",
       "status": "PASS",
-      "durationMs": 1.5850419999987935,
+      "durationMs": 2.690999999998894,
       "details": {
-        "latencyMs": 1.24,
+        "latencyMs": 2.15,
         "cached": true,
         "slaTargetMs": 20
       }
@@ -142,9 +142,9 @@
       "suite": "Cache Benchmark",
       "name": "Whitespace and punctuation normalized query hits in-memory cache with cached === true",
       "status": "PASS",
-      "durationMs": 1.5511249999981374,
+      "durationMs": 1.8201659999995172,
       "details": {
-        "latencyMs": 1.27,
+        "latencyMs": 1.48,
         "cached": true
       }
     },
@@ -152,11 +152,11 @@
       "suite": "User Flow",
       "name": "Complete lifecycle: Consult -> Inscribe Note -> Query Shelf -> Check Profile",
       "status": "PASS",
-      "durationMs": 4796.4983340000035,
+      "durationMs": 4703.079334000002,
       "details": {
         "success": true,
-        "user": "audit_user_1792013280060",
-        "bookAdded": "Pride and Prejudice"
+        "user": "audit_user_1792084150472",
+        "bookAdded": "The House in the Cerulean Sea"
       }
     }
   ],
@@ -166,44 +166,44 @@
       "samples": 10,
       "successful": 10,
       "failed": 0,
-      "min": 0.66,
-      "p50": 1.12,
-      "p95": 1.48,
-      "max": 1.48,
-      "avg": 1.06
+      "min": 0.72,
+      "p50": 0.93,
+      "p95": 1.55,
+      "max": 1.55,
+      "avg": 0.98
     },
     {
       "endpoint": "GET /api/books/daily",
       "samples": 10,
       "successful": 10,
       "failed": 0,
-      "min": 0.43,
-      "p50": 0.52,
-      "p95": 1.03,
-      "max": 1.03,
-      "avg": 0.58
+      "min": 0.36,
+      "p50": 0.72,
+      "p95": 1.63,
+      "max": 1.63,
+      "avg": 0.81
     },
     {
       "endpoint": "GET /api/margin-notes",
       "samples": 10,
       "successful": 10,
       "failed": 0,
-      "min": 511.28,
-      "p50": 642.33,
-      "p95": 706.85,
-      "max": 706.85,
-      "avg": 629.32
+      "min": 495.01,
+      "p50": 516.49,
+      "p95": 605.67,
+      "max": 605.67,
+      "avg": 537.54
     },
     {
       "endpoint": "GET /api/cover-proxy (fallback)",
       "samples": 10,
       "successful": 10,
       "failed": 0,
-      "min": 0.57,
-      "p50": 0.87,
-      "p95": 5.02,
-      "max": 5.02,
-      "avg": 1.22
+      "min": 0.31,
+      "p50": 0.41,
+      "p95": 1,
+      "max": 1,
+      "avg": 0.51
     }
   ]
 }
