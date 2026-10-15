@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "prisma generate && tsc -b && vite build",
+    "build:api": "esbuild src/server/vercelEntry.ts --bundle --platform=node --format=esm --external:@prisma/client --outfile=api/[...path].js && cp api/[...path].js api/index.js",
+    "build": "prisma generate && npm run build:api && tsc -b && vite build",
     "preview": "vite preview",
     "test:audit": "node scripts/verify-audit.js"
   },
@@ -28,6 +29,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
+    "esbuild": "^0.21.5",
     "postcss": "^8.4.49",
     "prisma": "^6.19.3",
     "tailwindcss": "^3.4.15",
