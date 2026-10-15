@@ -18,6 +18,7 @@ export interface ArchivistAiResponse {
     badge: string;
     rationale: string;
   }>;
+  cached: boolean;
 }
 
 const GRADIENTS = [
@@ -31,9 +32,29 @@ const GRADIENTS = [
   'from-[#8c5e43] via-[#65432f] to-[#3f291c]',
 ];
 
+// Strict cache key normalization for zero-cost deduplication
+export function normalizeQueryKey(raw: string): string {
+  raw = raw.toLowerCase().replace(/&/g, ' and ');
+  return raw
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // 24-hour in-memory cache to conserve Google Gemini free tier quota and prevent unnecessary API calls
 const queryCache = new Map<string, { timestamp: number; response: ArchivistAiResponse }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_QUERY_CACHE = 500;
+
+function setQueryCache(key: string, response: ArchivistAiResponse) {
+  if (queryCache.size >= MAX_QUERY_CACHE) {
+    const firstKey = queryCache.keys().next().value;
+    if (firstKey) queryCache.delete(firstKey);
+  }
+  queryCache.set(key, { timestamp: Date.now(), response });
+}
+
+let geminiCircuitBrokenUntil = 0;
 
 /**
  * Calls an LLM (Gemini, OpenAI, or Groq) if keys are present in process.env,
@@ -41,29 +62,38 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
  */
 export async function getArchivistAiRecommendations(rawQuery: string): Promise<ArchivistAiResponse> {
   const query = rawQuery.trim();
-  const normalizedKey = query.toLowerCase();
-
-  const cached = queryCache.get(normalizedKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    console.log('[ArchivistAI] Serving from cache (0 API cost, 0 quota consumed):', query);
-    return cached.response;
-  }
+  const normalizedKey = normalizeQueryKey(query);
 
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
   const groqKey = process.env.GROQ_API_KEY;
 
+  const cached = queryCache.get(normalizedKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    // If cached response was a degraded fallback but Gemini is available, regenerate with Gemini
+    if (!(cached.response.source === 'openlibrary_ai' && geminiKey && Date.now() > geminiCircuitBrokenUntil)) {
+      console.log('[ArchivistAI] Serving from cache (0 API cost, 0 quota consumed):', query);
+      return { ...cached.response, cached: true };
+    }
+  }
+
   let llmResult: { letter: string; books: AiBookRecommendation[] } | null = null;
   let source: ArchivistAiResponse['source'] = 'openlibrary_ai';
 
-  // 1. Try Gemini if configured (Google AI Studio Free Tier)
-  if (geminiKey) {
+  // 1. Try Gemini if configured (Google AI Studio Free Tier) and circuit breaker closed
+  if (geminiKey && Date.now() > geminiCircuitBrokenUntil) {
     try {
       console.log('[ArchivistAI] Consulting Gemini for query:', query);
       llmResult = await callGemini(query, geminiKey);
-      if (llmResult) source = 'gemini';
+      if (llmResult) {
+        source = 'gemini';
+      } else {
+        // Brief cooldown on transient spike
+        geminiCircuitBrokenUntil = Date.now() + 30 * 1000;
+      }
     } catch (err) {
-      console.warn('[ArchivistAI] Gemini call failed, trying fallback:', err);
+      console.warn('[ArchivistAI] Gemini call failed, tripping brief circuit breaker:', err);
+      geminiCircuitBrokenUntil = Date.now() + 30 * 1000;
     }
   }
 
@@ -96,49 +126,55 @@ export async function getArchivistAiRecommendations(rawQuery: string): Promise<A
     source = 'openlibrary_ai';
   }
 
-  // Enrich each book with live Open Library metadata & real covers
-  const enrichedRecommendations: ArchivistAiResponse['recommendations'] = [];
-
-  for (let i = 0; i < llmResult.books.length; i++) {
-    const rec = llmResult.books[i];
-    const enrichedBook = await fetchBookMetadataFromOpenLibrary(rec.title, rec.author, i);
-    enrichedRecommendations.push({
-      book: enrichedBook,
-      badge: rec.badge,
-      rationale: rec.rationale,
-    });
-  }
+  // Enrich each book with live Open Library metadata & real covers in parallel
+  const enrichedRecommendations: ArchivistAiResponse['recommendations'] = await Promise.all(
+    llmResult.books.map(async (rec, i) => {
+      const enrichedBook = await fetchBookMetadataFromOpenLibrary(rec.title, rec.author, i);
+      return {
+        book: enrichedBook,
+        badge: rec.badge,
+        rationale: rec.rationale,
+      };
+    })
+  );
 
   const response: ArchivistAiResponse = {
     query,
     source,
     letter: llmResult.letter,
     recommendations: enrichedRecommendations,
+    cached: false,
   };
 
-  queryCache.set(normalizedKey, {
-    timestamp: Date.now(),
-    response,
-  });
+  setQueryCache(normalizedKey, response);
 
   return response;
 }
 
 /**
- * Calls Google Gemini (Gemini 2.0 Flash / 1.5 Flash) with structured JSON output.
+ * Calls Google Gemini with deep prompt analysis and structured JSON output.
  */
 async function callGemini(query: string, apiKey: string): Promise<{ letter: string; books: AiBookRecommendation[] } | null> {
   const systemPrompt = `You are the Master Literary Archivist of BookShelf, an analog sanctuary for discerning readers.
-The reader describes their current feeling, mood, dilemma, environment, or desired reading experience (e.g. "rainy day wanting romance", "in flight needing a quick thriller", "philosophical melancholy", "burnout recovery").
+The reader provides a feeling, mood, dilemma, environment, reading goal, OR a specific quote, passage, concept, or phrase (e.g. "The hardest part is 0 to 1", "To be or not to be", "All happy families are alike", "build the future").
 
-Your task:
-1. Write an evocative, poetic, warm Archivist's Letter (2-3 sentences) acknowledging the reader's exact situation or emotion and announcing the three volumes pulled from the archives for them.
-2. Recommend exactly THREE distinct, acclaimed, published books in the world that are the absolute best match for this situation.
-3. For each book, provide:
-   - title: exact published title
-   - author: author name
-   - badge: a 2-3 word poetic accord badge (e.g. "Rainy Day Accord", "In-Flight Thriller", "Poetic Solace", "Midnight Resonance")
-   - rationale: a 2-sentence explanation of why this exact book answers their specific situation and feeling.
+Your primary task:
+1. Deep Prompt Analysis & Prioritization:
+   - First, carefully analyze the user's inquiry: does it quote, describe, reference, or closely relate to a specific published book, core thesis, or author?
+     * For example, "The hardest part is 0 to 1" or "0 to 1" directly references Peter Thiel's seminal book "Zero to One: Notes on Startups, or How to Build the Future".
+     * "Move fast and break things" references books on early tech innovation.
+     * "Atomic habits" or "tiny changes" references James Clear's "Atomic Habits".
+     * "Man's search for meaning" references Viktor Frankl.
+   - If the inquiry relates to or describes a specific book, that closest/target book MUST be your FIRST recommendation (Book #1).
+   - Then, choose Book #2 and Book #3 as the two best acclaimed companion masterworks that deeply explore, complement, or debate that same central concept or journey.
+   - If the inquiry is an open mood, atmosphere, or setting (e.g., "rainy day wanting romance", "in flight needing a quick thriller", "philosophical melancholy"), recommend the three most acclaimed published books in the world matching that exact atmosphere.
+2. Write an evocative, poetic, warm Archivist's Letter (2-3 sentences) acknowledging the reader's exact quote, situation, or dilemma and announcing the three volumes pulled from the archives for them.
+3. Recommend exactly THREE distinct, acclaimed, published books in the world.
+4. For each book, provide:
+   - title: exact published title (e.g. "Zero to One: Notes on Startups, or How to Build the Future")
+   - author: author name (e.g. "Peter Thiel")
+   - badge: a 2-3 word poetic accord badge (e.g. "The Core Thesis", "Harmonic Counterpart", "Foundational Accord")
+   - rationale: a 2-sentence explanation of why this exact book answers their specific inquiry and how it directly relates to what they asked.
 
 Return ONLY a valid JSON object matching this structure:
 {
@@ -150,7 +186,14 @@ Return ONLY a valid JSON object matching this structure:
   ]
 }`;
 
-  const models = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+  // Prioritize 100% Free-Tier Google AI Studio Flash models (1,500 requests/day, 15 RPM, $0 cost)
+  // These models run under serviceTier: "standard" with lifetime $0 billing.
+  const models = [
+    'gemini-flash-lite-latest',
+    'gemini-flash-latest',
+    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
+  ];
 
   for (const model of models) {
     try {
@@ -173,6 +216,7 @@ Return ONLY a valid JSON object matching this structure:
       });
 
       if (!res.ok) {
+        console.warn(`[ArchivistAI] Gemini model ${model} HTTP ${res.status}`);
         continue;
       }
 
@@ -183,8 +227,12 @@ Return ONLY a valid JSON object matching this structure:
       // Clean any accidental markdown code fences
       text = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
-      return JSON.parse(text);
-    } catch {
+      const parsed = JSON.parse(text);
+      if (parsed && Array.isArray(parsed.books) && parsed.books.length >= 3) {
+        return parsed;
+      }
+    } catch (err) {
+      console.warn(`[ArchivistAI] Gemini call error on ${model}:`, err);
       continue;
     }
   }
@@ -276,10 +324,41 @@ Return ONLY valid JSON:
 }
 
 /**
- * Intelligent situational parser that maps natural language queries to Open Library subjects,
+ * Intelligent situational parser that maps natural language queries to Open Library books,
  * finding 3 fresh, unique titles from millions of books.
  */
 async function fallbackOpenLibraryDiscovery(query: string): Promise<{ letter: string; books: AiBookRecommendation[] }> {
+  const cleanQ = query.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // 1. First, search Open Library directly for the query terms to find directly related titles/authors
+  try {
+    const searchUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQ)}&limit=12&fields=key,title,author_name,cover_i,first_publish_year,subject`;
+    const searchRes = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'BookshelfApp/1.0 (archivist-fallback)' },
+    });
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      const docsWithCovers = (searchData.docs || []).filter((d: any) => d.title && d.author_name?.[0] && d.cover_i);
+      const docsToUse = docsWithCovers.length >= 3 ? docsWithCovers : (searchData.docs || []).filter((d: any) => d.title && d.author_name?.[0]);
+
+      if (docsToUse.length >= 3) {
+        const top3 = docsToUse.slice(0, 3);
+        const badges = ['Archival Discovery', 'Companion Reflection', 'Resonant Volume'];
+        const books: AiBookRecommendation[] = top3.map((d: any, idx: number) => ({
+          title: d.title,
+          author: Array.isArray(d.author_name) ? d.author_name[0] : d.author_name,
+          badge: badges[idx] || 'Curated Volume',
+          rationale: `Retrieved from the archives to address your inquiry of "${query}". A profound literary work answering your thoughts.`,
+        }));
+        const letter = `“Traveler, our archives cross-referenced your inquiry of «${query}» against the world's literary canon. We retrieved these three volumes as the closest, most resonant works to accompany your contemplation.”`;
+        return { letter, books };
+      }
+    }
+  } catch (err) {
+    console.warn('[ArchivistAI] Direct Open Library search failed, falling back to situational subjects:', err);
+  }
+
+  // 2. Situational subject discovery
   const qLower = query.toLowerCase();
 
   let subject = 'fiction';
@@ -315,7 +394,7 @@ async function fallbackOpenLibraryDiscovery(query: string): Promise<{ letter: st
   } else if (/thriller|mystery|crime|detective|murder|suspense/i.test(qLower)) {
     subject = 'thriller';
     badgeTheme = 'Chilling Accord';
-  } else if (/finance|money|invest|wealth|market|stock|rich|capital/i.test(qLower)) {
+  } else if (/finance|money|invest|wealth|market|stock|rich|capital|startup|business|entrepreneur/i.test(qLower)) {
     subject = 'investing';
     badgeTheme = 'Fiscal Wisdom';
   } else if (/habit|productiv|growth|self.?help|discipline|focus|burnout/i.test(qLower)) {
@@ -398,9 +477,9 @@ async function fallbackOpenLibraryDiscovery(query: string): Promise<{ letter: st
  * Enriches a title and author with full Open Library metadata and reliable cover.
  */
 async function fetchBookMetadataFromOpenLibrary(title: string, author: string, index: number): Promise<Book> {
-  const cleanTitle = title.replace(/[^\w\s]/g, ' ').trim();
-  const cleanAuthor = author.replace(/[^\w\s]/g, ' ').trim();
-  const searchUrl = `https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitle)}&author=${encodeURIComponent(cleanAuthor)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year,ratings_average,ratings_count,number_of_pages_median,subject,first_sentence`;
+  const mainTitle = title.split(/[:\-–—]/)[0].trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+  const cleanTitle = title.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleanAuthor = author.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
   let coverId: number | null = null;
   let year = 2020;
@@ -410,25 +489,35 @@ async function fetchBookMetadataFromOpenLibrary(title: string, author: string, i
   let subjects: string[] = [];
   let firstSentence: string | null = null;
 
-  try {
-    const res = await fetch(searchUrl, {
-      headers: { 'User-Agent': 'BookshelfApp/1.0 (archivist-enrich)' },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const doc = data.docs?.[0];
-      if (doc) {
-        if (doc.cover_i) coverId = doc.cover_i;
-        if (doc.first_publish_year) year = doc.first_publish_year;
-        if (doc.ratings_average) rating = Number(doc.ratings_average.toFixed(2));
-        if (doc.ratings_count) reviewCount = doc.ratings_count;
-        if (doc.number_of_pages_median) pages = doc.number_of_pages_median;
-        if (doc.subject) subjects = (doc.subject || []).filter((s: any) => typeof s === 'string').slice(0, 3);
-        firstSentence = typeof doc.first_sentence === 'string' ? doc.first_sentence : doc.first_sentence?.[0] || null;
+  // Search by mainTitle + author, then q= query, then cleanTitle
+  const searchUrls = [
+    `https://openlibrary.org/search.json?title=${encodeURIComponent(mainTitle)}&author=${encodeURIComponent(cleanAuthor)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year,ratings_average,ratings_count,number_of_pages_median,subject,first_sentence`,
+    `https://openlibrary.org/search.json?q=${encodeURIComponent(mainTitle + ' ' + cleanAuthor)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year,ratings_average,ratings_count,number_of_pages_median,subject,first_sentence`,
+    `https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitle)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year,ratings_average,ratings_count,number_of_pages_median,subject,first_sentence`,
+  ];
+
+  for (const searchUrl of searchUrls) {
+    try {
+      const res = await fetch(searchUrl, {
+        headers: { 'User-Agent': 'BookshelfApp/1.0 (archivist-enrich)' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const doc = data.docs?.[0];
+        if (doc) {
+          if (doc.cover_i) coverId = doc.cover_i;
+          if (doc.first_publish_year) year = doc.first_publish_year;
+          if (doc.ratings_average) rating = Number(doc.ratings_average.toFixed(2));
+          if (doc.ratings_count) reviewCount = doc.ratings_count;
+          if (doc.number_of_pages_median) pages = doc.number_of_pages_median;
+          if (doc.subject) subjects = (doc.subject || []).filter((s: any) => typeof s === 'string').slice(0, 3);
+          firstSentence = typeof doc.first_sentence === 'string' ? doc.first_sentence : doc.first_sentence?.[0] || null;
+          if (coverId) break;
+        }
       }
+    } catch (err) {
+      console.warn(`[ArchivistAI] Could not enrich metadata for "${title}":`, err);
     }
-  } catch (err) {
-    console.warn(`[ArchivistAI] Could not enrich metadata for "${title}":`, err);
   }
 
   const idSlug = (title + '-' + author).toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 32);
@@ -449,7 +538,7 @@ async function fetchBookMetadataFromOpenLibrary(title: string, author: string, i
     moodTags: subjects.length > 0 ? subjects : ['Archivist Recommendation', 'Nuanced Craft'],
     coverGradient: GRADIENTS[index % GRADIENTS.length],
     coverTextColor: '#f7f4ed',
-    coverImage: coverId ? `/api/cover-proxy?url=${encodeURIComponent(`https://covers.openlibrary.org/b/id/${coverId}-L.jpg`)}` : undefined,
+    coverImage: coverId ? `/api/cover-proxy?url=${encodeURIComponent(`https://covers.openlibrary.org/b/id/${coverId}-M.jpg`)}` : undefined,
     isbn: 'AI-' + Math.random().toString().slice(2, 10),
   };
 }

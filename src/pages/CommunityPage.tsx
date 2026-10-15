@@ -1,21 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Users, Calendar, MessageSquare, Plus, Check, Heart, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  Users,
+  Calendar,
+  MessageSquare,
+  Plus,
+  Check,
+  Heart,
+  ArrowRight,
+  Sparkles,
+  Loader2,
+  Crown,
+  Pencil,
+  ArrowUpRight,
+  BookOpen,
+} from 'lucide-react';
 import { READING_CIRCLES_DATA } from '../data/communityData';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { soundManager } from '../utils/sound';
 import { useAuth } from '../context/AuthContext';
 import { fetchTopMarginNotes, likeMarginNote } from '../services/marginNotesApi';
-import { MarginNote } from '../types/book';
-import confetti from 'canvas-confetti';
+import { fetchReadingCircles } from '../services/readingCirclesApi';
+import { MarginNote, ReadingCircle } from '../types/book';
+import { CreateCircleModal } from '../components/community/CreateCircleModal';
+import { EditCircleModal } from '../components/community/EditCircleModal';
 
 export const CommunityPage: React.FC = () => {
-  const { user } = useAuth();
-  const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>(['circle-1']);
+  const navigate = useNavigate();
+  const { user, isLoggedIn, openAuthModal, toggleJoinCircle } = useAuth();
+
+  // Reading circles state
+  const [circles, setCircles] = useState<ReadingCircle[]>(READING_CIRCLES_DATA);
+  const [isLoadingCircles, setIsLoadingCircles] = useState(true);
+  const [activeCircleTab, setActiveCircleTab] = useState<'all' | 'founded'>('all');
+
+  // Modal State for founding and editing a circle
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [circleName, setCircleName] = useState('');
-  const [circleBook, setCircleBook] = useState('');
+  const [editingCircle, setEditingCircle] = useState<ReadingCircle | null>(null);
 
   // Top 4 notes from database
   const [topNotes, setTopNotes] = useState<MarginNote[]>([]);
@@ -29,6 +51,31 @@ export const CommunityPage: React.FC = () => {
     }
   });
 
+  // Fetch circles on load
+  useEffect(() => {
+    let isCancelled = false;
+    async function loadCircles() {
+      setIsLoadingCircles(true);
+      try {
+        const data = await fetchReadingCircles();
+        if (!isCancelled && data && data.length > 0) {
+          setCircles(data);
+        }
+      } catch (err) {
+        console.warn('Failed to load circles:', err);
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingCircles(false);
+        }
+      }
+    }
+    loadCircles();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  // Fetch top margin notes on load
   useEffect(() => {
     let isCancelled = false;
     async function loadDailyNotes() {
@@ -77,11 +124,26 @@ export const CommunityPage: React.FC = () => {
     }
   };
 
-  const toggleJoin = (id: string) => {
-    if (joinedCircleIds.includes(id)) {
-      setJoinedCircleIds(joinedCircleIds.filter((item) => item !== id));
-    } else {
-      setJoinedCircleIds([...joinedCircleIds, id]);
+  // Joined circle IDs: strictly derived from authenticated user profile (never hardcoded!)
+  const joinedCircleIds = isLoggedIn && user?.joinedCircles ? user.joinedCircles : [];
+
+  const handleToggleJoin = async (id: string) => {
+    if (!isLoggedIn) {
+      openAuthModal();
+      return;
+    }
+
+    const joinedNow = await toggleJoinCircle(id);
+    setCircles((prev) =>
+      prev.map((c) =>
+        c.id === id
+          ? { ...c, membersCount: Math.max(1, c.membersCount + (joinedNow ? 1 : -1)) }
+          : c
+      )
+    );
+
+    if (joinedNow) {
+      const confetti = (await import('canvas-confetti')).default;
       confetti({
         particleCount: 30,
         spread: 50,
@@ -91,17 +153,20 @@ export const CommunityPage: React.FC = () => {
     }
   };
 
-  const handleCreateCircle = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!circleName.trim()) return;
-    setIsModalOpen(false);
-    confetti({
-      particleCount: 45,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#1c1c1c', '#eceae4', '#8c5e43'],
-    });
+  const handleOpenCreateModal = () => {
+    if (!isLoggedIn) {
+      openAuthModal();
+      return;
+    }
+    setIsModalOpen(true);
   };
+
+  // Filter circles: All vs My Founded Circles
+  const myFoundedCircles = circles.filter(
+    (c) => c.founderEmail && user?.email && c.founderEmail.toLowerCase() === user.email.toLowerCase()
+  );
+
+  const displayedCircles = activeCircleTab === 'all' ? circles : myFoundedCircles;
 
   return (
     <div className="min-h-screen pt-24 pb-20 px-4 sm:px-6 max-w-7xl mx-auto space-y-12">
@@ -122,7 +187,7 @@ export const CommunityPage: React.FC = () => {
 
         <Button
           variant="primary"
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenCreateModal}
           className="gap-2 shrink-0 shadow-button-inset"
         >
           <Plus className="w-4 h-4" />
@@ -130,74 +195,193 @@ export const CommunityPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Reading Circles Grid */}
+      {/* Reading Circles Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold font-editorial text-[#1c1c1c] tracking-tight-sub">
-            Active Salons & Reading Circles
-          </h2>
-          <span className="text-[13px] text-[#5f5f5d]">Gathering weekly online & offline</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-semibold font-editorial text-[#1c1c1c] tracking-tight-sub">
+              Active Salons & Reading Circles
+            </h2>
+            <span className="text-[13px] text-[#5f5f5d]">Gathering weekly online & offline • Showing top 3 salons</span>
+          </div>
+
+          {/* Filter Tabs & View All Salons Link */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setActiveCircleTab('all')}
+              className={`px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-colors border flex items-center gap-1.5 ${
+                activeCircleTab === 'all'
+                  ? 'bg-[#1c1c1c] text-[#fcfbf8] border-[#1c1c1c] shadow-button-inset'
+                  : 'bg-[#fcfbf8] text-[#5f5f5d] border-[#eceae4] hover:bg-[#eceae4] hover:text-[#1c1c1c]'
+              }`}
+            >
+              <span>All Salons</span>
+              <span className={`text-[11px] font-mono ${activeCircleTab === 'all' ? 'text-white/70' : 'text-[#8c5e43]'}`}>
+                ({circles.length})
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveCircleTab('founded')}
+              className={`px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-colors border flex items-center gap-1.5 ${
+                activeCircleTab === 'founded'
+                  ? 'bg-[#1c1c1c] text-[#fcfbf8] border-[#1c1c1c] shadow-button-inset'
+                  : 'bg-[#fcfbf8] text-[#5f5f5d] border-[#eceae4] hover:bg-[#eceae4] hover:text-[#1c1c1c]'
+              }`}
+            >
+              <Crown className="w-3.5 h-3.5 text-[#8c5e43]" />
+              <span>My Founded</span>
+              <span className={`text-[11px] font-mono ${activeCircleTab === 'founded' ? 'text-white/70' : 'text-[#8c5e43]'}`}>
+                ({myFoundedCircles.length})
+              </span>
+            </button>
+
+            <Button
+              variant="cream"
+              size="sm"
+              onClick={() => navigate('/community/salons')}
+              className="gap-1.5 text-[12px] font-medium"
+            >
+              <span>View All Salons</span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-[#8c5e43]" />
+            </Button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {READING_CIRCLES_DATA.map((circle) => {
-            const isJoined = joinedCircleIds.includes(circle.id);
-            return (
-              <div
-                key={circle.id}
-                className="bg-[#fcfbf8] border border-[#eceae4] hover:border-[rgba(28,28,28,0.35)] rounded-card p-6 flex flex-col justify-between shadow-book-sheet transition-all"
-              >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="subtle">Weekly Salon</Badge>
-                    <span className="text-[12px] text-[#5f5f5d] font-mono">
-                      {circle.membersCount} Members
-                    </span>
-                  </div>
+        {/* Circles Grid (strictly top 3) or Tab-Specific Empty States */}
+        {isLoadingCircles ? (
+          <div className="py-12 flex flex-col items-center justify-center gap-2 text-[#5f5f5d]">
+            <Loader2 className="w-6 h-6 animate-spin text-[#8c5e43]" />
+            <span className="text-[13px] font-mono">Gathering active salons...</span>
+          </div>
+        ) : activeCircleTab === 'founded' && !isLoggedIn ? (
+          <div className="text-center py-12 bg-[#fcfbf8] border border-dashed border-[#eceae4] rounded-card space-y-3">
+            <Users className="w-8 h-8 text-[#8c5e43] mx-auto opacity-70" />
+            <h3 className="text-lg font-medium text-[#1c1c1c]">Sign In to View Founded Circles</h3>
+            <p className="text-[14px] text-[#5f5f5d] max-w-md mx-auto">
+              Sign in to inscribe and oversee your literary salons, guide discussions, and gather reading fellows.
+            </p>
+            <Button variant="primary" size="sm" onClick={openAuthModal} className="gap-2 shadow-button-inset">
+              <span>Sign In to Sanctuary</span>
+            </Button>
+          </div>
+        ) : activeCircleTab === 'founded' && myFoundedCircles.length === 0 ? (
+          <div className="text-center py-12 bg-[#fcfbf8] border border-dashed border-[#eceae4] rounded-card space-y-3">
+            <Crown className="w-8 h-8 text-[#8c5e43] mx-auto opacity-70" />
+            <h3 className="text-lg font-medium text-[#1c1c1c]">No Founded Circles Yet</h3>
+            <p className="text-[14px] text-[#5f5f5d] max-w-md mx-auto">
+              You haven't founded any reading salons yet. Create a circle around a masterpiece and invite fellow scholars to converse.
+            </p>
+            <Button variant="primary" size="sm" onClick={handleOpenCreateModal} className="gap-2 shadow-button-inset">
+              <Plus className="w-4 h-4" />
+              <span>Found Your First Reading Circle</span>
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {displayedCircles.slice(0, 3).map((circle) => {
+                const isJoined = joinedCircleIds.includes(circle.id);
+                const isMyCircle =
+                  circle.founderEmail &&
+                  user?.email &&
+                  circle.founderEmail.toLowerCase() === user.email.toLowerCase();
 
-                  <div>
-                    <h3 className="font-editorial text-xl font-medium text-[#1c1c1c]">
-                      {circle.name}
-                    </h3>
-                    <p className="text-[13px] text-[#5f5f5d] mt-1">
-                      Currently Reading: <span className="text-[#1c1c1c] font-medium">{circle.currentBook}</span> by {circle.author}
-                    </p>
-                  </div>
-
-                  <div className="bg-[#f7f4ed] p-3 rounded-standard border border-[#eceae4] text-[13px] space-y-1">
-                    <div className="flex items-center gap-2 text-[#8c5e43] font-medium text-[12px]">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>{circle.meetingDate}</span>
-                    </div>
-                    <p className="text-[#5f5f5d] text-[12px] line-clamp-2">
-                      Topic: {circle.topic}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-[#eceae4] mt-4 flex items-center justify-between">
-                  <span className="text-[12px] text-[#5f5f5d] flex items-center gap-1">
-                    <MessageSquare className="w-3.5 h-3.5" /> Active Salon
-                  </span>
-                  <Button
-                    variant={isJoined ? 'ghost' : 'primary'}
-                    size="sm"
-                    onClick={() => toggleJoin(circle.id)}
-                    className="gap-1.5"
+                return (
+                  <div
+                    key={circle.id}
+                    className="bg-[#fcfbf8] border border-[#eceae4] hover:border-[rgba(28,28,28,0.35)] rounded-card p-6 flex flex-col justify-between shadow-book-sheet transition-all"
                   >
-                    {isJoined ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" /> Joined
-                      </>
-                    ) : (
-                      'Join Salon'
-                    )}
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        {isMyCircle ? (
+                          <span className="text-[11px] font-mono text-[#8c5e43] bg-[#f7f4ed] px-2 py-0.5 rounded border border-[#eceae4] flex items-center gap-1 font-semibold">
+                            <Crown className="w-3 h-3 text-[#8c5e43]" />
+                            <span>Founder: You</span>
+                          </span>
+                        ) : (
+                          <Badge variant="subtle">Weekly Salon</Badge>
+                        )}
+                        <span className="text-[12px] text-[#5f5f5d] font-mono">
+                          {circle.membersCount} Members
+                        </span>
+                      </div>
+
+                      <div>
+                        <h3 className="font-editorial text-xl font-medium text-[#1c1c1c]">
+                          {circle.name}
+                        </h3>
+                        <p className="text-[13px] text-[#5f5f5d] mt-1">
+                          Currently Reading:{' '}
+                          <span className="text-[#1c1c1c] font-medium">{circle.currentBook}</span>{' '}
+                          {circle.author && `by ${circle.author}`}
+                        </p>
+                      </div>
+
+                      <div className="bg-[#f7f4ed] p-3 rounded-standard border border-[#eceae4] text-[13px] space-y-1">
+                        <div className="flex items-center gap-2 text-[#8c5e43] font-medium text-[12px]">
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>{circle.meetingDate}</span>
+                        </div>
+                        <p className="text-[#5f5f5d] text-[12px] line-clamp-2">
+                          Topic: {circle.topic}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-[#eceae4] mt-4 flex items-center justify-between">
+                      <span className="text-[12px] text-[#5f5f5d] flex items-center gap-1">
+                        <MessageSquare className="w-3.5 h-3.5" /> Active Salon
+                      </span>
+
+                      {isMyCircle ? (
+                        <Button
+                          variant="cream"
+                          size="sm"
+                          onClick={() => setEditingCircle(circle)}
+                          className="gap-1.5 text-[12px] text-[#8c5e43] hover:text-[#1c1c1c]"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>Edit Salon</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant={isJoined ? 'ghost' : 'primary'}
+                          size="sm"
+                          onClick={() => handleToggleJoin(circle.id)}
+                          className="gap-1.5"
+                        >
+                          {isJoined ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Joined</span>
+                            </>
+                          ) : (
+                            <>
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span>Join Salon</span>
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Bottom link to view all salons */}
+            <div className="pt-2 text-center">
+              <Link
+                to="/community/salons"
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-[#fcfbf8] hover:bg-[#eceae4] border border-[#eceae4] hover:border-[#1c1c1c] text-[13px] font-medium text-[#1c1c1c] transition-all shadow-button-inset group"
+              >
+                <span>Explore all {circles.length} reading salons & guilds</span>
+                <ArrowRight className="w-3.5 h-3.5 text-[#8c5e43] group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Top 4 Reader Marginalia of the Day & Explore Option */}
@@ -314,50 +498,21 @@ export const CommunityPage: React.FC = () => {
       </div>
 
       {/* Create Circle Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#f7f4ed] border border-[#eceae4] rounded-container p-6 parchment-texture shadow-xl">
-            <h3 className="text-xl font-medium text-[#1c1c1c] font-editorial mb-1">
-              Found a Reading Circle
-            </h3>
-            <p className="text-[13px] text-[#5f5f5d] mb-4">
-              Gather fellow minds around a book that demands shared contemplation.
-            </p>
-            <form onSubmit={handleCreateCircle} className="space-y-3">
-              <div>
-                <label className="block text-[12px] text-[#5f5f5d] mb-1">Circle Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Kyoto Tea & Prose Society"
-                  value={circleName}
-                  onChange={(e) => setCircleName(e.target.value)}
-                  className="w-full bg-[#fcfbf8] border border-[#eceae4] rounded-standard px-3 py-2 text-[14px] text-[#1c1c1c] focus-warm"
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] text-[#5f5f5d] mb-1">Inaugural Book</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. The Book of Disquiet"
-                  value={circleBook}
-                  onChange={(e) => setCircleBook(e.target.value)}
-                  className="w-full bg-[#fcfbf8] border border-[#eceae4] rounded-standard px-3 py-2 text-[14px] text-[#1c1c1c] focus-warm"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-3">
-                <Button type="button" variant="cream" size="sm" onClick={() => setIsModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" size="sm">
-                  Inscribe Circle
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateCircleModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={(newCircle) => setCircles((prev) => [newCircle, ...prev])}
+      />
+
+      {/* Edit Circle Modal (Founder Only) */}
+      <EditCircleModal
+        isOpen={!!editingCircle}
+        circle={editingCircle}
+        onClose={() => setEditingCircle(null)}
+        onSuccess={(updated) => {
+          setCircles((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+        }}
+      />
     </div>
   );
 };

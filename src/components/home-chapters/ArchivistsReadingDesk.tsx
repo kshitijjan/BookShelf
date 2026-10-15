@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { Sparkles, Feather, Bookmark, X, BookOpen, ArrowUpRight, Star } from 'lucide-react';
 import { Book } from '../../types/book';
 import { ArchivistResult } from '../../utils/archivistEngine';
@@ -24,12 +23,8 @@ export const ArchivistsReadingDesk: React.FC<ArchivistsReadingDeskProps> = ({
   onResetQuery,
 }) => {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 12 }}
-      transition={{ duration: 0.35, ease: 'easeOut' }}
-      className="mt-6 bg-[#fcfaf5] border-2 border-[#8c5e43]/30 rounded-card p-5 sm:p-6 shadow-book-sheet relative overflow-hidden"
+    <div
+      className="mt-6 bg-[#fcfaf5] border-2 border-[#8c5e43]/30 rounded-card p-5 sm:p-6 shadow-book-sheet relative overflow-hidden animate-fade-in transition-all duration-300 ease-out"
     >
       {/* Decorative Ornate Corner Borders */}
       <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-[#8c5e43]/40 pointer-events-none" />
@@ -210,6 +205,6 @@ export const ArchivistsReadingDesk: React.FC<ArchivistsReadingDeskProps> = ({
           ✦ Inscribe another inquiry
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 };

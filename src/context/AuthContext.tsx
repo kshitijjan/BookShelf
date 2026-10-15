@@ -21,6 +21,7 @@ interface AuthContextType {
   saveProfile: (updates: Partial<UserProfile>) => void;
   addBookToShelf: (book: Book, status: 'read' | 'reading_list', yearRead?: number) => Promise<void>;
   removeBookFromShelf: (bookId: string) => Promise<void>;
+  toggleJoinCircle: (circleId: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -96,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               guildsJoined: dbProfile.guildsJoined ?? 0,
               isOnboarded: !!dbProfile.isOnboarded,
               shelfBooks: Array.isArray(dbProfile.shelfBooks) ? dbProfile.shelfBooks : [],
+              joinedCircles: Array.isArray(dbProfile.joinedCircles) ? dbProfile.joinedCircles : [],
             };
 
             setUser(hydrated);
@@ -217,6 +219,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       personalities: updates.personalities || user?.personalities || [],
       selectedGenres: currentGenres,
       tasteProfile: computedTaste,
+      shelfBooks: updates.shelfBooks !== undefined ? updates.shelfBooks : (user?.shelfBooks || []),
       memberSince: updates.memberSince || user?.memberSince || getInitialMonthYear(),
       challengeGoal: updates.challengeGoal ?? user?.challengeGoal ?? 12,
       booksRead: updates.booksRead ?? user?.booksRead ?? 0,
@@ -333,6 +336,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const toggleJoinCircle = async (circleId: string): Promise<boolean> => {
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return false;
+    }
+
+    const currentJoined = Array.isArray(user.joinedCircles) ? user.joinedCircles : [];
+    const isJoined = currentJoined.includes(circleId);
+    const updatedJoined = isJoined
+      ? currentJoined.filter((id) => id !== circleId)
+      : [...currentJoined, circleId];
+
+    const updatedUser: UserProfile = {
+      ...user,
+      joinedCircles: updatedJoined,
+      guildsJoined: updatedJoined.length,
+    };
+
+    setUser(updatedUser);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+    } catch {}
+
+    try {
+      const clerkId = clerkUser?.id || user.email;
+      await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clerkId,
+          email: user.email,
+          joinedCircles: updatedJoined,
+          guildsJoined: updatedJoined.length,
+        }),
+      });
+
+      await fetch('/api/circles/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          circleId,
+          userEmail: user.email,
+          action: isJoined ? 'leave' : 'join',
+        }),
+      });
+    } catch (err) {
+      console.warn('Error saving joined circle to profile:', err);
+    }
+
+    return !isJoined;
+  };
+
   // User is considered logged in when Clerk is signed in AND user profile is marked onboarded
   const isUserLoggedIn = !!isSignedIn && (!!user && user.isOnboarded);
 
@@ -355,6 +410,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         saveProfile,
         addBookToShelf,
         removeBookFromShelf,
+        toggleJoinCircle,
       }}
     >
       {children}

@@ -26,6 +26,7 @@ model Profile {
   guildsJoined     Int      @default(0)
   isOnboarded      Boolean  @default(false)
   bookmarks        String[] @default([])
+  joinedCircles    String[] @default([])
   shelfBooks       Json?    @default("[]")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -57,5 +58,30 @@ model MarginNote {
   timestamp      String?  @default("Just now")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@index([isTopPick, likes(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([likes(sort: Desc)])
+  @@index([bookTitle])
+  @@index([userId])
+}
+
+model ReadingCircle {
+  id            String   @id @default(uuid())
+  name          String
+  currentBook   String
+  author        String   @default("Acclaimed Author")
+  membersCount  Int      @default(1)
+  meetingDate   String   @default("Sundays, 7:00 PM EST")
+  topic         String   @default("Literary Exploration & Deep Discussion")
+  coverGradient String   @default("from-[#1e2738] to-[#121620]")
+  coverImage    String?
+  founderEmail  String?
+  founderName   String?
+  joinedEmails  String[] @default([])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([founderEmail])
 }
 

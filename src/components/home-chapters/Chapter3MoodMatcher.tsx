@@ -20,7 +20,7 @@ export const Chapter3MoodMatcher: React.FC<Chapter3MoodMatcherProps> = ({
   bookmarkedIds,
   onToggleBookmark,
 }) => {
-  const [selectedMoodId, setSelectedMoodId] = useState<string>('melancholic');
+  const [selectedMoodId, setSelectedMoodId] = useState<string>('classics');
 
   const selectedCategory = MOOD_CATEGORIES.find(m => m.id === selectedMoodId) || MOOD_CATEGORIES[0];
 
@@ -98,7 +98,7 @@ export const Chapter3MoodMatcher: React.FC<Chapter3MoodMatcherProps> = ({
           })}
         </div>
 
-        {/* Selected Vibe Banner */}
+        {/* Selected Resonance Banner */}
         <div className="bg-[#fcfbf8] border border-[#eceae4] rounded-card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-book-sheet">
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">

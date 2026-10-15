@@ -23,6 +23,7 @@ export interface UserProfile {
   guildsJoined: number;
   isOnboarded: boolean;
   shelfBooks?: UserShelfBook[];
+  joinedCircles?: string[];
 }
 
 export interface ScholarlyRankOption {

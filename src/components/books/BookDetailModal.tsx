@@ -4,7 +4,6 @@ import { Book } from '../../types/book';
 import { BookCover } from '../ui/BookCover';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import confetti from 'canvas-confetti';
 import { getBookDetailedSynopsis } from '../../services/openLibrary';
 import { useAuth } from '../../context/AuthContext';
 
@@ -115,7 +114,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
   if (!book) return null;
 
-  const handleMarkAsRead = (year: number) => {
+  const handleMarkAsRead = async (year: number) => {
     if (!isSignedIn) {
       openAuthModal();
       return;
@@ -125,6 +124,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       onToggleBookmark(book.id);
     }
     setShowAddMenu(false);
+    const confetti = (await import('canvas-confetti')).default;
     confetti({
       particleCount: 40,
       spread: 70,
@@ -133,7 +133,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     });
   };
 
-  const handleAddToReadingList = () => {
+  const handleAddToReadingList = async () => {
     if (!isSignedIn) {
       openAuthModal();
       return;
@@ -143,6 +143,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       onToggleBookmark(book.id);
     }
     setShowAddMenu(false);
+    const confetti = (await import('canvas-confetti')).default;
     confetti({
       particleCount: 30,
       spread: 50,

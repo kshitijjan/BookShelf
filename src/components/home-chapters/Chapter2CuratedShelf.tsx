@@ -22,7 +22,15 @@ export const Chapter2CuratedShelf: React.FC<Chapter2CuratedShelfProps> = ({
 }) => {
   const [selectedGenre, setSelectedGenre] = useState<string>('All');
 
-  const genres = ['All', 'Speculative Fiction', 'Contemporary Fiction', 'Gothic Mystery', 'Philosophical Memoir', 'Literary Fantasy'];
+  const genres = [
+    'All',
+    'Top Classics',
+    'Best Fiction',
+    'Philosophy',
+    'Self-Help',
+    'Business & Leadership',
+    'Tech & AI',
+  ];
 
   const filteredBooks = selectedGenre === 'All'
     ? BOOKS_DATA

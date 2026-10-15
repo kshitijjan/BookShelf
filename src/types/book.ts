@@ -66,6 +66,10 @@ export interface ReadingCircle {
   topic: string;
   coverGradient: string;
   coverImage?: string;
+  founderEmail?: string;
+  founderName?: string;
+  joinedEmails?: string[];
+  createdAt?: string;
 }
 
 export interface ChapterMeta {

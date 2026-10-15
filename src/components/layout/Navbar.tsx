@@ -57,9 +57,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span className="font-editorial text-[20px] font-semibold tracking-tight-sub text-[#1c1c1c]">
             BookShelf
           </span>
-          <span className="hidden sm:inline-block text-[11px] font-mono text-[#5f5f5d] uppercase tracking-wider px-2 py-0.5 rounded-full border border-[#eceae4] bg-[rgba(28,28,28,0.03)]">
-            Volume 1
-          </span>
         </Link>
 
         {/* Center Nav Links */}
@@ -111,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Shelf CTA: 'Build Shelf' when not logged in / not onboarded, 'My Shelf' when logged in */}
           {isLoggedIn ? (
             <div className="hidden sm:flex items-center">
-              <Link to="/profile">
+              <Link to="/shelf">
                 <Button variant="primary" size="sm" className="gap-2 shadow-button-inset">
                   <Library className="w-4 h-4" />
                   <span>My Shelf</span>
@@ -179,16 +176,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
           <div className="pt-2 border-t border-[#eceae4]">
             {isLoggedIn ? (
-              <Link
-                to="/profile"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block"
-              >
-                <Button variant="primary" className="w-full justify-center gap-2">
-                  <Library className="w-4 h-4" />
-                  <span>My Shelf ({savedBooksCount})</span>
-                </Button>
-              </Link>
+              <div className="space-y-2">
+                <Link
+                  to="/shelf"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block"
+                >
+                  <Button variant="primary" className="w-full justify-center gap-2">
+                    <Library className="w-4 h-4" />
+                    <span>My Shelf ({savedBooksCount})</span>
+                  </Button>
+                </Link>
+              </div>
             ) : isSignedIn ? (
               <Button
                 variant="primary"

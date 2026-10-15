@@ -23,7 +23,6 @@ import {
 } from '../services/marginNotesApi';
 import { MarginNote } from '../types/book';
 import { BookSearchAutocomplete } from '../components/books/BookSearchAutocomplete';
-import confetti from 'canvas-confetti';
 
 export const CommunityExplorePage: React.FC = () => {
   const { user } = useAuth();
@@ -143,6 +142,7 @@ export const CommunityExplorePage: React.FC = () => {
       setIsWritingNote(false);
       soundManager.playStampSound();
 
+      const confetti = (await import('canvas-confetti')).default;
       confetti({
         particleCount: 40,
         spread: 65,

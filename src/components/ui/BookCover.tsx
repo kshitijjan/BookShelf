@@ -18,8 +18,26 @@ export const BookCover: React.FC<BookCoverProps> = ({
   // Reset image error and source whenever book changes
   useEffect(() => {
     setImageError(false);
-    setCurrentSrc(book.coverImage);
-  }, [book.id, book.coverImage]);
+    if (book.coverImage) {
+      setCurrentSrc(book.coverImage);
+    } else if (book.title) {
+      // Dynamic fallback lookup if book has no coverImage
+      let isMounted = true;
+      const cleanTitle = encodeURIComponent(book.title);
+      const cleanAuthor = encodeURIComponent(book.author || '');
+      fetch(`/api/cover-lookup?title=${cleanTitle}&author=${cleanAuthor}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (isMounted && data?.coverImage) {
+            setCurrentSrc(data.coverImage);
+          }
+        })
+        .catch(() => {});
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [book.id, book.coverImage, book.title, book.author]);
 
   const handleImageError = () => {
     // If external URL failed in the browser, retry via our backend proxy
@@ -40,6 +58,12 @@ export const BookCover: React.FC<BookCoverProps> = ({
     lg: 'w-[190px] h-[280px] text-[14px]',
   };
 
+  const pixelDimensions = {
+    sm: { width: 100, height: 145 },
+    md: { width: 140, height: 205 },
+    lg: { width: 190, height: 280 },
+  };
+
   const showImage = Boolean(currentSrc) && !imageError;
 
   return (
@@ -53,6 +77,9 @@ export const BookCover: React.FC<BookCoverProps> = ({
         <img 
           src={currentSrc} 
           alt={book.title}
+          width={pixelDimensions[size].width}
+          height={pixelDimensions[size].height}
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover"
           loading="lazy"
           referrerPolicy="no-referrer"

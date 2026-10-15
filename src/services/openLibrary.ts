@@ -23,7 +23,7 @@ export const mapOpenLibraryBook = (doc: any): Book => {
   const id = doc.key || (doc.work_key ? `/works/${doc.work_key}` : Math.random().toString());
   
   const coverId = doc.cover_i || doc.cover_id;
-  const coverImage = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : undefined;
+  const coverImage = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : undefined;
   
   const authors = doc.author_name ? doc.author_name : (doc.authors ? doc.authors.map((a:any) => a.name) : ['Unknown Author']);
   const authorName = authors[0] || 'Unknown Author';

@@ -3,7 +3,6 @@ import { ArrowLeft, RotateCcw, Send, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { soundManager } from '../../utils/sound';
-import confetti from 'canvas-confetti';
 
 interface Chapter5ColophonProps {
   onPrevPage: () => void;
@@ -17,10 +16,11 @@ export const Chapter5Colophon: React.FC<Chapter5ColophonProps> = ({
   const [email, setEmail] = useState('');
   const [isSubscribed, setIsSubscribed] = useState(false);
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
     setIsSubscribed(true);
+    const confetti = (await import('canvas-confetti')).default;
     confetti({
       particleCount: 40,
       spread: 70,
@@ -154,7 +154,7 @@ export const Chapter5Colophon: React.FC<Chapter5ColophonProps> = ({
           </Link>
 
           <Link
-            to="/profile"
+            to="/shelf"
             className="p-4 rounded-card border border-[#eceae4] hover:border-[rgba(28,28,28,0.4)] bg-[#f7f4ed] transition-all group"
           >
             <div className="text-[11px] font-mono text-[#8c5e43] uppercase tracking-wider">Sanctuary</div>

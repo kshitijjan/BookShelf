@@ -7,7 +7,6 @@ import { useAuth } from '../../context/AuthContext';
 import { fetchTopMarginNotes, inscribeMarginNote, likeMarginNote } from '../../services/marginNotesApi';
 import { MarginNote } from '../../types/book';
 import { BookSearchAutocomplete } from '../books/BookSearchAutocomplete';
-import confetti from 'canvas-confetti';
 
 interface Chapter4MarginNotesProps {
   onNextPage: () => void;
@@ -125,6 +124,7 @@ export const Chapter4MarginNotes: React.FC<Chapter4MarginNotesProps> = ({
       setIsWritingNote(false);
       soundManager.playStampSound();
 
+      const confetti = (await import('canvas-confetti')).default;
       confetti({
         particleCount: 35,
         spread: 60,
@@ -273,9 +273,32 @@ export const Chapter4MarginNotes: React.FC<Chapter4MarginNotesProps> = ({
 
         {/* Marginalia Grid - Top 4 Notes */}
         {isLoading ? (
-          <div className="py-12 flex flex-col items-center justify-center gap-2 text-[#5f5f5d]">
-            <Loader2 className="w-6 h-6 animate-spin text-[#8c5e43]" />
-            <span className="text-[13px] font-mono">Unfolding community marginalia...</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="bg-[#fcfbf8] border border-[#eceae4] rounded-card p-5 h-[210px] flex flex-col justify-between animate-pulse shadow-book-sheet"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="h-4 bg-[#eceae4] rounded w-2/5" />
+                    <div className="h-3 bg-[#eceae4] rounded w-16" />
+                  </div>
+                  <div className="border-l-2 border-[#eceae4] pl-3 py-1 space-y-1.5 mb-3">
+                    <div className="h-3.5 bg-[#eceae4] rounded w-full" />
+                    <div className="h-3.5 bg-[#eceae4] rounded w-4/5" />
+                  </div>
+                  <div className="h-3 bg-[#eceae4] rounded w-3/4" />
+                </div>
+                <div className="flex items-center justify-between pt-3 border-t border-[#eceae4]/60">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-[#eceae4]" />
+                    <div className="h-3 bg-[#eceae4] rounded w-20" />
+                  </div>
+                  <div className="h-4 bg-[#eceae4] rounded w-12" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

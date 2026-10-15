@@ -134,7 +134,7 @@ export const Chapter1Hero: React.FC<Chapter1HeroProps> = ({
           {/* Book reference link on the right side */}
           <div className="flex justify-end mt-2.5">
             <Link
-              to="/books?book=book-4"
+              to="/books?title=The%20Shadow%20of%20the%20Wind"
               className="inline-flex items-center gap-1.5 text-[14px] text-[#5f5f5d] hover:text-[#1c1c1c] group/link transition-colors"
               title="Inspect volume in Literary Vault"
             >
@@ -265,7 +265,7 @@ export const Chapter1Hero: React.FC<Chapter1HeroProps> = ({
             </div>
           </Link>
 
-          <Link to="/profile" className="group flex items-start gap-3 p-3 rounded-card border border-transparent hover:border-[#eceae4] hover:bg-[rgba(28,28,28,0.02)] transition-all">
+          <Link to="/shelf" className="group flex items-start gap-3 p-3 rounded-card border border-transparent hover:border-[#eceae4] hover:bg-[rgba(28,28,28,0.02)] transition-all">
             <div className="mt-0.5 p-1.5 rounded-full bg-[#fcfbf8] border border-[#eceae4] group-hover:border-[rgba(28,28,28,0.2)] shadow-sm">
               <Feather className="w-3.5 h-3.5 text-[#8c5e43]" />
             </div>

@@ -5,7 +5,6 @@ import { BOOKS_DATA } from '../../data/booksData';
 import { searchBooks } from '../../services/openLibrary';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../ui/Button';
-import confetti from 'canvas-confetti';
 
 interface AddBookModalProps {
   isOpen: boolean;
@@ -79,9 +78,10 @@ export const AddBookModal: React.FC<AddBookModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleAdd = (book: Book, status: 'read' | 'reading_list') => {
+  const handleAdd = async (book: Book, status: 'read' | 'reading_list') => {
     addBookToShelf(book, status, status === 'read' ? selectedYear : undefined);
     setAddedIds((prev) => ({ ...prev, [book.id]: status }));
+    const confetti = (await import('canvas-confetti')).default;
     confetti({
       particleCount: 25,
       spread: 50,

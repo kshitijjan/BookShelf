@@ -12,7 +12,7 @@ export const BookCardSkeleton: React.FC = () => {
 
         {/* Book Visual & Info */}
         <div className="flex gap-4 items-start mb-3">
-          <div className="w-[60px] h-[90px] bg-[#eceae4] rounded-[3px] shrink-0 shadow-sm" />
+          <div className="w-[100px] h-[145px] bg-[#eceae4] rounded-[3px] shrink-0 shadow-sm" />
           <div className="flex-1 space-y-2 py-1">
             <div className="w-4/5 h-4 bg-[#eceae4] rounded-[3px]" />
             <div className="w-3/5 h-3 bg-[#eceae4] rounded-[3px]" />

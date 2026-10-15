@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Filter, BookOpen, Loader2 } from 'lucide-react';
+import { Search, Filter, BookOpen, Loader2, ChevronRight } from 'lucide-react';
 import { BookCard } from '../components/ui/BookCard';
 import { BookCardSkeleton } from '../components/ui/BookCardSkeleton';
 import { BookDetailModal } from '../components/books/BookDetailModal';
@@ -13,19 +13,34 @@ interface BooksPageProps {
   onToggleBookmark: (id: string) => void;
 }
 
-const DAILY_GENRES_LIST = [
-  'All',
+const DAILY_GENRES_ORDER = [
   'Top Classics',
   'Best Fiction',
-  'Self-Help & Personal Growth',
-  'Business Management & Leadership',
+  'Self-Help',
+  'Business & Leadership',
   'Startups & Entrepreneurship',
-  'Money, Investing & Stock Market',
+  'Money & Investing',
   'Philosophy',
   'Psychology',
   'Biography & Memoir',
   'Tech & AI'
 ];
+
+const DAILY_GENRES_LIST = [
+  'All',
+  ...DAILY_GENRES_ORDER
+];
+
+const matchesGenre = (bookGenre: string, selected: string) => {
+  if (selected === 'All') return true;
+  const bg = (bookGenre || '').toLowerCase().trim();
+  const sg = (selected || '').toLowerCase().trim();
+  if (bg === sg) return true;
+  if (bg.includes(sg) || sg.includes(bg)) return true;
+  const bgFirst = bg.split(/[\s&]+/)[0];
+  const sgFirst = sg.split(/[\s&]+/)[0];
+  return bgFirst === sgFirst;
+};
 
 export const BooksPage: React.FC<BooksPageProps> = ({
   bookmarkedIds,
@@ -57,7 +72,10 @@ export const BooksPage: React.FC<BooksPageProps> = ({
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed.books && Array.isArray(parsed.books) && parsed.books.length > 0) {
-          return parsed.books;
+          const hasCovers = parsed.books.some((b: Book) => !!b.coverImage);
+          if (hasCovers) {
+            return parsed.books;
+          }
         }
       }
     } catch {
@@ -79,27 +97,45 @@ export const BooksPage: React.FC<BooksPageProps> = ({
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch today's verified 30-book catalog from Neon DB / API on mount
-  useEffect(() => {
-    const fetchDaily = async () => {
-      try {
-        const res = await fetch('/api/books/daily');
-        if (!res.ok) throw new Error('Failed to load daily books');
-        const data = await res.json();
-        if (data.books && Array.isArray(data.books) && data.books.length > 0) {
-          setDailyCatalog(data.books);
-          sessionStorage.setItem('bookshelf_daily_catalog', JSON.stringify({
-            dateKey: data.dateKey,
-            books: data.books,
-          }));
-        }
-      } catch (err) {
-        console.warn('[BooksPage] Using initial daily catalog fallback:', err);
+  // Fetch today's verified 30-book catalog from Neon DB / API
+  const fetchDaily = useCallback(async () => {
+    try {
+      const res = await fetch('/api/books/daily');
+      if (!res.ok) throw new Error('Failed to load daily books');
+      const data = await res.json();
+      if (data.books && Array.isArray(data.books) && data.books.length > 0) {
+        setDailyCatalog(data.books);
+        sessionStorage.setItem('bookshelf_daily_catalog', JSON.stringify({
+          dateKey: data.dateKey,
+          books: data.books,
+        }));
       }
-    };
-
-    fetchDaily();
+    } catch (err) {
+      console.warn('[BooksPage] Using initial daily catalog fallback:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchDaily();
+  }, [fetchDaily]);
+
+  // Autonomous 12:00 AM Midnight Auto-Refresh: silently re-fetches when a new day arrives
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+      const diff = nextMidnight.getTime() - now.getTime();
+
+      // When midnight is reached, silently refresh the shelf with today's new rotation
+      if (diff <= 2000) {
+        setTimeout(() => {
+          fetchDaily();
+        }, 3000);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [fetchDaily]);
 
   // Close typeahead when clicking outside
   useEffect(() => {
@@ -253,7 +289,7 @@ export const BooksPage: React.FC<BooksPageProps> = ({
 
     // Filter by genre
     if (selectedGenre !== 'All') {
-      list = list.filter(b => b.genre.toLowerCase() === selectedGenre.toLowerCase());
+      list = list.filter(b => matchesGenre(b.genre, selectedGenre));
     }
 
     // Filter by local search query if present
@@ -291,7 +327,7 @@ export const BooksPage: React.FC<BooksPageProps> = ({
           The Literary Vault
         </h1>
         <p className="text-[16px] text-[#5f5f5d] mt-1 max-w-2xl">
-          A curated sanctuary of transcendent works, timeless philosophy, and modern essentials for the thoughtful reader.
+          A curated sanctuary of transcendent works, timeless philosophy, and modern essentials for the thoughtful reader. Curated daily across ten distinct shelves.
         </p>
       </div>
 
@@ -361,7 +397,7 @@ export const BooksPage: React.FC<BooksPageProps> = ({
               onChange={(e) => setSortBy(e.target.value as 'relevance' | 'rating' | 'year' | 'pages')}
               className="bg-[#f7f4ed] border border-[#eceae4] rounded-standard px-3 py-2.5 text-[13px] text-[#1c1c1c] focus-warm"
             >
-              <option value="relevance">Curator's Order</option>
+              <option value="relevance">Curator's Order (3 per row)</option>
               <option value="rating">Highest Rated</option>
               <option value="year">Publication Year</option>
               <option value="pages">Shortest to Longest</option>
@@ -375,7 +411,7 @@ export const BooksPage: React.FC<BooksPageProps> = ({
           {DAILY_GENRES_LIST.map((g) => {
             const count = g === 'All' 
               ? dailyCatalog.length 
-              : dailyCatalog.filter(b => b.genre.toLowerCase() === g.toLowerCase()).length;
+              : dailyCatalog.filter(b => matchesGenre(b.genre, g)).length;
             const isSelected = selectedGenre === g && !searchInput;
 
             return (
@@ -418,7 +454,88 @@ export const BooksPage: React.FC<BooksPageProps> = ({
           <h3 className="text-lg font-medium text-[#1c1c1c]">No volumes match your criteria</h3>
           <p className="text-[14px] text-[#5f5f5d] mt-1">Try resetting your search query or genre filter.</p>
         </div>
+      ) : isDailyView && selectedGenre === 'All' && !searchInput.trim() && sortBy === 'relevance' ? (
+        /* Genre-Curated Shelves: Exactly 3 books per row across all 10 genres */
+        <div className="space-y-12">
+          {DAILY_GENRES_ORDER.map((genre, idx) => {
+            const genreBooks = dailyCatalog.filter(b => matchesGenre(b.genre, genre));
+            if (genreBooks.length === 0) return null;
+
+            return (
+              <section key={genre} className="space-y-4">
+                <div className="flex items-center justify-between border-b border-[#eceae4] pb-3">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs text-[#8c5e43] font-semibold tracking-wider">
+                      ROW {String(idx + 1).padStart(2, '0')} / 10
+                    </span>
+                    <span className="text-[#d5cdbe]">/</span>
+                    <h2 className="font-editorial text-2xl font-medium text-[#1c1c1c] tracking-tight">
+                      {genre}
+                    </h2>
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-[#f2efe9] text-[#705a4f] border border-[#e5dfd5]">
+                      3 Bestsellers • 4.5+ ★
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleGenreChange(genre)}
+                    className="text-[12px] font-mono text-[#8c5e43] hover:text-[#1c1c1c] transition-colors flex items-center gap-1 group"
+                  >
+                    <span>Focus Shelf</span>
+                    <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {genreBooks.slice(0, 3).map((book) => (
+                    <BookCard
+                      key={book.id}
+                      book={book}
+                      onSelect={handleSelectBook}
+                      isBookmarked={bookmarkedIds.includes(book.id)}
+                      onToggleBookmark={onToggleBookmark}
+                      featuredBadge="Bestseller"
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : isDailyView && selectedGenre !== 'All' && !searchInput.trim() && sortBy === 'relevance' ? (
+        /* Single Focused Genre Row: Exactly 3 books in 1 row */
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-b border-[#eceae4] pb-3">
+            <div className="flex items-center gap-3">
+              <h2 className="font-editorial text-2xl sm:text-3xl font-medium text-[#1c1c1c] tracking-tight">
+                {selectedGenre}
+              </h2>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-[#f2efe9] text-[#705a4f] border border-[#e5dfd5]">
+                3 Bestsellers • 4.5+ ★
+              </span>
+            </div>
+            <button
+              onClick={() => handleGenreChange('All')}
+              className="text-[12px] font-mono text-[#8c5e43] hover:underline"
+            >
+              &larr; View All 10 Shelves
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedBooks.slice(0, 3).map((book) => (
+              <BookCard
+                key={book.id}
+                book={book}
+                onSelect={handleSelectBook}
+                isBookmarked={bookmarkedIds.includes(book.id)}
+                onToggleBookmark={onToggleBookmark}
+                featuredBadge="Bestseller"
+              />
+            ))}
+          </div>
+        </div>
       ) : (
+        /* Standard 3-Column Grid for Searches and Custom Sorting */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sortedBooks.map((book) => (
             <BookCard

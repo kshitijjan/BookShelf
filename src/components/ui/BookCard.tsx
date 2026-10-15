@@ -3,6 +3,7 @@ import { Star, Bookmark, ArrowUpRight } from 'lucide-react';
 import { Book } from '../../types/book';
 import { BookCover } from './BookCover';
 import { Badge } from './Badge';
+import { formatCompactNumber } from '../../utils/formatters';
 
 interface BookCardProps {
   book: Book;
@@ -62,7 +63,7 @@ export const BookCard: React.FC<BookCardProps> = ({
             <div className="flex items-center gap-1.5 mt-2 text-[12px] text-[#1c1c1c]">
               <Star className="w-3.5 h-3.5 fill-[#1c1c1c] text-[#1c1c1c]" />
               <span className="font-medium">{book.rating.toFixed(2)}</span>
-              <span className="text-[#5f5f5d]">({book.reviewCount})</span>
+              <span className="text-[#5f5f5d]">({formatCompactNumber(book.reviewCount)})</span>
             </div>
 
             {/* Mood tag preview */}

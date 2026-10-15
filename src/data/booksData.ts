@@ -660,7 +660,7 @@ export const CHAPTERS_LIST = [
     index: 2,
     romanNumeral: 'III',
     title: 'The Taste Alchemist',
-    subtitle: 'Interactive Mood & Vibe Matcher'
+    subtitle: 'Reading Rhythm & Frequency Filters'
   },
   {
     index: 3,

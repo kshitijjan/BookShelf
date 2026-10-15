@@ -125,7 +125,18 @@ export const INITIAL_MARGIN_NOTES = [
   },
 ];
 
+let hasCheckedSeed = false;
+
+// In-memory cache for top margin notes (60s TTL)
+let topNotesCache: { timestamp: number; notes: any[] } | null = null;
+const TOP_NOTES_TTL_MS = 60 * 1000;
+
+export function invalidateTopNotesCache() {
+  topNotesCache = null;
+}
+
 export async function ensureSeedMarginNotes(db: PrismaClient) {
+  if (hasCheckedSeed) return;
   try {
     const count = await db.marginNote.count();
     if (count === 0) {
@@ -150,24 +161,35 @@ export async function ensureSeedMarginNotes(db: PrismaClient) {
       }
       console.log('[MarginNotesService] Seeded successfully.');
     }
+    hasCheckedSeed = true;
   } catch (err) {
     console.error('[MarginNotesService] Error checking/seeding margin notes:', err);
   }
 }
 
 export async function getTopMarginNotes(db: PrismaClient, limit = 4) {
+  if (topNotesCache && Date.now() - topNotesCache.timestamp < TOP_NOTES_TTL_MS) {
+    return topNotesCache.notes.slice(0, limit);
+  }
+
   await ensureSeedMarginNotes(db);
   // Return top 4 notes (ordered by isTopPick desc, then likes desc)
-  return await db.marginNote.findMany({
+  const notes = await db.marginNote.findMany({
     orderBy: [
       { isTopPick: 'desc' },
       { likes: 'desc' },
     ],
     take: limit,
   });
+
+  topNotesCache = { timestamp: Date.now(), notes };
+  return notes;
 }
 
-export async function getAllMarginNotes(db: PrismaClient, query?: { search?: string; bookTitle?: string; sort?: string }) {
+export async function getAllMarginNotes(
+  db: PrismaClient,
+  query?: { search?: string; bookTitle?: string; sort?: string; limit?: number; offset?: number }
+) {
   await ensureSeedMarginNotes(db);
   const where: any = {};
 
@@ -196,8 +218,13 @@ export async function getAllMarginNotes(db: PrismaClient, query?: { search?: str
     orderBy = [{ likes: 'desc' }];
   }
 
+  const take = Math.min(query?.limit || 50, 100);
+  const skip = query?.offset || 0;
+
   return await db.marginNote.findMany({
     where,
     orderBy,
+    take,
+    skip,
   });
 }
