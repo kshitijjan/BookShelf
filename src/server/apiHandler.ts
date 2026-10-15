@@ -28,6 +28,11 @@ try {
   // ignore if already loaded or missing
 }
 
+// Fallback direct URL if only DATABASE_URL is provided in Vercel
+if (process.env.DATABASE_URL && !process.env.DATABASE_URL_UNPOOLED) {
+  process.env.DATABASE_URL_UNPOOLED = process.env.DATABASE_URL;
+}
+
 function getTunedDatabaseUrl(): string {
   let dbUrl = process.env.DATABASE_URL || '';
   if (!dbUrl) return '';
@@ -46,13 +51,15 @@ function getTunedDatabaseUrl(): string {
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 export function getPrisma(): PrismaClient {
+  const tunedUrl = getTunedDatabaseUrl();
+  if (!tunedUrl) {
+    throw new Error('DATABASE_URL environment variable is missing in Vercel. Please add DATABASE_URL under Project Settings > Environment Variables.');
+  }
+
   if (!globalForPrisma.prisma || !(globalForPrisma.prisma as any).readingCircle) {
-    const tunedUrl = getTunedDatabaseUrl();
-    if (tunedUrl) {
-      process.env.DATABASE_URL = tunedUrl;
-    }
+    process.env.DATABASE_URL = tunedUrl;
     globalForPrisma.prisma = new PrismaClient({
-      datasources: tunedUrl ? { db: { url: tunedUrl } } : undefined,
+      datasources: { db: { url: tunedUrl } },
       log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
     });
   }
@@ -60,7 +67,6 @@ export function getPrisma(): PrismaClient {
 }
 
 export function parseJsonBody(req: any): Promise<any> {
-  // In serverless environments like Vercel, req.body might already be parsed
   if (req.body && typeof req.body === 'object') {
     return Promise.resolve(req.body);
   }
@@ -133,7 +139,6 @@ function checkRateLimit(ip: string, maxHits: number, windowMs: number): boolean 
   return true;
 }
 
-// Clean up stale rate limits every 5 minutes
 if (typeof setInterval !== 'undefined') {
   const timer: any = setInterval(() => {
     const now = Date.now();
@@ -181,7 +186,6 @@ function isAllowedCoverUrl(rawUrl: string): boolean {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
     const host = parsed.hostname.toLowerCase();
 
-    // Reject private/loopback/cloud metadata IP ranges
     if (
       host === 'localhost' ||
       host === '127.0.0.1' ||
@@ -214,14 +218,21 @@ function isAllowedCoverUrl(rawUrl: string): boolean {
 
 /**
  * Core HTTP Request Handler for all /api/* endpoints
- * Runs both in Vite dev middleware and Vercel serverless functions
+ * Runs in Vite dev middleware, Vite preview, and Vercel serverless functions
  * Returns true if request was handled, false otherwise
  */
 export async function handleApiRequest(req: any, res: any): Promise<boolean> {
   const rawUrl = req.url || '/';
-  const url = new URL(rawUrl, 'http://localhost');
+  const parsedUrl = new URL(rawUrl, 'http://localhost');
+  let pathname = parsedUrl.pathname.replace(/\/$/, '') || '/';
 
-  if (!url.pathname.startsWith('/api')) {
+  // Support Vercel catch-all [...path] routing where req.query.path has the segments
+  if ((pathname === '/api' || pathname === '') && req.query?.path) {
+    const segments = Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path;
+    pathname = `/api/${segments}`.replace(/\/$/, '');
+  }
+
+  if (!pathname.startsWith('/api')) {
     return false;
   }
 
@@ -239,26 +250,24 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
   }
 
   // GET & POST /api/profile
-  if (url.pathname === '/api/profile') {
-    const db = getPrisma();
-
+  if (pathname === '/api/profile') {
     // GET /api/profile?clerkId=... or ?email=...
     if (req.method === 'GET') {
-      const verifiedUserId = await getVerifiedClerkUserId(req);
-      const queryClerkId = url.searchParams.get('clerkId');
-      const email = url.searchParams.get('email');
-
-      // If token verified, prioritize verified user id
-      const clerkId = verifiedUserId || queryClerkId;
-
-      if (!clerkId && !email) {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Missing clerkId or email' }));
-        return true;
-      }
-
       try {
+        const db = getPrisma();
+        const verifiedUserId = await getVerifiedClerkUserId(req);
+        const queryClerkId = parsedUrl.searchParams.get('clerkId');
+        const email = parsedUrl.searchParams.get('email');
+
+        const clerkId = verifiedUserId || queryClerkId;
+
+        if (!clerkId && !email) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Missing clerkId or email' }));
+          return true;
+        }
+
         const conditions: any[] = [];
         if (clerkId) conditions.push({ clerkId });
         if (email) conditions.push({ email });
@@ -273,7 +282,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         console.error('Error fetching profile from Prisma:', err);
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Database query failed' }));
+        res.end(JSON.stringify({ error: err?.message || 'Database query failed' }));
       }
       return true;
     }
@@ -281,10 +290,10 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     // POST /api/profile (create or update profile)
     if (req.method === 'POST') {
       try {
+        const db = getPrisma();
         const body = await parseJsonBody(req);
         const verifiedUserId = await getVerifiedClerkUserId(req);
 
-        // Security: If verified by Clerk token, enforce verified user ID
         const clerkId = verifiedUserId || body.clerkId;
         const identifier = clerkId || body.email;
 
@@ -359,16 +368,16 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         console.error('Error saving profile to Prisma:', err);
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Failed to persist profile', details: err?.message }));
+        res.end(JSON.stringify({ error: err?.message || 'Failed to persist profile', details: err?.message }));
       }
       return true;
     }
   }
 
   // POST /api/profile/shelf
-  if (url.pathname === '/api/profile/shelf' && req.method === 'POST') {
-    const db = getPrisma();
+  if (pathname === '/api/profile/shelf' && req.method === 'POST') {
     try {
+      const db = getPrisma();
       const body = await parseJsonBody(req);
       const verifiedUserId = await getVerifiedClerkUserId(req);
       const clerkId = verifiedUserId || body.clerkId;
@@ -427,18 +436,17 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
       console.error('Error updating shelf:', err);
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Failed to update shelf', details: err?.message }));
+      res.end(JSON.stringify({ error: err?.message || 'Failed to update shelf', details: err?.message }));
     }
     return true;
   }
 
   // GET & POST & PUT /api/circles
-  if (url.pathname === '/api/circles') {
-    const db = getPrisma();
-
+  if (pathname === '/api/circles') {
     // GET /api/circles
     if (req.method === 'GET') {
       try {
+        const db = getPrisma();
         const dbCircles = await db.readingCircle.findMany({
           orderBy: { createdAt: 'desc' },
         });
@@ -450,7 +458,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
       } catch (err: any) {
         console.error('Error fetching circles from database:', err);
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ circles: READING_CIRCLES_DATA }));
+        res.end(JSON.stringify({ circles: READING_CIRCLES_DATA, warning: err?.message }));
       }
       return true;
     }
@@ -458,6 +466,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     // POST /api/circles
     if (req.method === 'POST') {
       try {
+        const db = getPrisma();
         const body = await parseJsonBody(req);
         const { name, currentBook, author, meetingDate, topic, coverGradient, founderEmail, founderName } = body;
         if (!name || !currentBook) {
@@ -506,7 +515,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         console.error('Error founding circle:', err);
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Failed to found reading circle', details: err?.message }));
+        res.end(JSON.stringify({ error: err?.message || 'Failed to found reading circle', details: err?.message }));
       }
       return true;
     }
@@ -514,6 +523,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     // PUT /api/circles (Founder only)
     if (req.method === 'PUT' || req.method === 'PATCH') {
       try {
+        const db = getPrisma();
         const body = await parseJsonBody(req);
         const { id, name, currentBook, author, meetingDate, topic, userEmail } = body;
         if (!id || !name || !currentBook) {
@@ -583,16 +593,16 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         console.error('Error updating circle:', err);
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Failed to update reading circle', details: err?.message }));
+        res.end(JSON.stringify({ error: err?.message || 'Failed to update reading circle', details: err?.message }));
       }
       return true;
     }
   }
 
   // POST /api/circles/join
-  if (url.pathname === '/api/circles/join' && req.method === 'POST') {
-    const db = getPrisma();
+  if (pathname === '/api/circles/join' && req.method === 'POST') {
     try {
+      const db = getPrisma();
       const body = await parseJsonBody(req);
       const { circleId, userEmail, action } = body;
       if (!circleId) {
@@ -645,17 +655,17 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
       console.error('Error joining/leaving circle:', err);
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Failed to update membership', details: err?.message }));
+      res.end(JSON.stringify({ error: err?.message || 'Failed to update membership', details: err?.message }));
     }
     return true;
   }
 
   // GET /api/books/daily
-  if (url.pathname === '/api/books/daily' && req.method === 'GET') {
-    const db = getPrisma();
+  if (pathname === '/api/books/daily' && req.method === 'GET') {
     try {
-      const requestedDate = url.searchParams.get('dateKey') || getTodayDateKey();
-      const forceRefresh = url.searchParams.get('refresh') === 'true';
+      const db = getPrisma();
+      const requestedDate = parsedUrl.searchParams.get('dateKey') || getTodayDateKey();
+      const forceRefresh = parsedUrl.searchParams.get('refresh') === 'true';
       const cached = serializedDailyCache.get(requestedDate);
       const cachedStr = cached ? cached.buffer.toString('utf8') : '';
       const cachedHasCovers = cachedStr.includes('"coverImage"');
@@ -685,19 +695,18 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
       console.error('Error fetching daily books:', err);
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Failed to fetch daily catalog', details: err?.message }));
+      res.end(JSON.stringify({ error: err?.message || 'Failed to fetch daily catalog', details: err?.message }));
     }
     return true;
   }
 
   // POST or GET /api/books/daily/refresh (Autonomous midnight refresh or Vercel Cron ping)
-  if (url.pathname === '/api/books/daily/refresh' && (req.method === 'POST' || req.method === 'GET')) {
-    const db = getPrisma();
+  if (pathname === '/api/books/daily/refresh' && (req.method === 'POST' || req.method === 'GET')) {
     try {
+      const db = getPrisma();
       const body = req.method === 'POST' ? await parseJsonBody(req) : {};
-      const targetDate = body.dateKey || url.searchParams.get('dateKey') || getTodayDateKey();
+      const targetDate = body.dateKey || parsedUrl.searchParams.get('dateKey') || getTodayDateKey();
 
-      // Quota Guard: If today's catalog is already populated with 30 AI books, do not call Gemini again
       const existing = await db.dailyCatalog.findUnique({
         where: { dateKey: targetDate },
         select: { booksJson: true },
@@ -705,7 +714,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
 
       if (existing && Array.isArray(existing.booksJson) && existing.booksJson.length >= 30) {
         const firstId = (existing.booksJson[0] as any)?.id || '';
-        if (firstId.startsWith('ai-daily-') && !body.force && url.searchParams.get('force') !== 'true') {
+        if (firstId.startsWith('ai-daily-') && !body.force && parsedUrl.searchParams.get('force') !== 'true') {
           console.log(`[API /api/books/daily/refresh] Serving existing AI catalog for ${targetDate} (quota preserved)`);
           res.setHeader('Content-Type', 'application/json');
           res.end(
@@ -739,13 +748,13 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
       console.error('Error refreshing daily books:', err);
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Failed to refresh daily catalog', details: err?.message }));
+      res.end(JSON.stringify({ error: err?.message || 'Failed to refresh daily catalog', details: err?.message }));
     }
     return true;
   }
 
   // GET /api/books/daily/status
-  if (url.pathname === '/api/books/daily/status' && req.method === 'GET') {
+  if (pathname === '/api/books/daily/status' && req.method === 'GET') {
     const ms = getMsUntilMidnight();
     const hoursUntil = (ms / (1000 * 60 * 60)).toFixed(2);
     res.setHeader('Content-Type', 'application/json');
@@ -762,9 +771,9 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
   }
 
   // GET /api/cover-lookup
-  if (url.pathname === '/api/cover-lookup' && req.method === 'GET') {
-    const title = url.searchParams.get('title') || '';
-    const author = url.searchParams.get('author') || '';
+  if (pathname === '/api/cover-lookup' && req.method === 'GET') {
+    const title = parsedUrl.searchParams.get('title') || '';
+    const author = parsedUrl.searchParams.get('author') || '';
 
     if (!title) {
       res.statusCode = 400;
@@ -826,7 +835,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         }
       }
     } catch {
-      // ignore and fallback
+      // ignore
     }
 
     try {
@@ -862,9 +871,9 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     return true;
   }
 
-  // GET & HEAD /api/cover-proxy (with SSRF protection & disk-free LRU memory cache)
-  if (url.pathname === '/api/cover-proxy' && (req.method === 'GET' || req.method === 'HEAD')) {
-    const targetUrl = url.searchParams.get('url');
+  // GET & HEAD /api/cover-proxy
+  if (pathname === '/api/cover-proxy' && (req.method === 'GET' || req.method === 'HEAD')) {
+    const targetUrl = parsedUrl.searchParams.get('url');
     if (!targetUrl) {
       res.statusCode = 400;
       res.setHeader('Content-Type', 'image/svg+xml');
@@ -874,7 +883,6 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
 
     const isHttpOrHttps = targetUrl.startsWith('http://') || targetUrl.startsWith('https://');
 
-    // Internal fallback tokens
     if (!isHttpOrHttps) {
       let cachedFallback = coverCache.get(targetUrl);
       const ttl = cachedFallback?.ttl || COVER_CACHE_TTL_MS;
@@ -896,7 +904,6 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
       return true;
     }
 
-    // SSRF Validation: verify targetUrl against whitelist
     if (!isAllowedCoverUrl(targetUrl)) {
       res.statusCode = 400;
       res.setHeader('Content-Type', 'image/svg+xml');
@@ -904,7 +911,6 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
       return true;
     }
 
-    // Cache hit (<1ms SLA)
     const cached = coverCache.get(targetUrl);
     const ttl = cached?.ttl || COVER_CACHE_TTL_MS;
     if (cached && Date.now() - cached.timestamp < ttl) {
@@ -977,10 +983,9 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     return true;
   }
 
-  // POST /api/archivist/consult (AI Situational Consult with Rate Limiting)
-  if (url.pathname === '/api/archivist/consult' && req.method === 'POST') {
+  // POST /api/archivist/consult
+  if (pathname === '/api/archivist/consult' && req.method === 'POST') {
     const ip = getClientIp(req);
-    // Rate limit: max 20 consultations per 60 seconds per IP
     if (!checkRateLimit(`archivist_${ip}`, 20, 60000)) {
       res.statusCode = 429;
       res.setHeader('Content-Type', 'application/json');
@@ -1011,17 +1016,16 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
   }
 
   // GET & POST /api/margin-notes
-  if (url.pathname === '/api/margin-notes') {
-    const db = getPrisma();
-
+  if (pathname === '/api/margin-notes') {
     // GET /api/margin-notes
     if (req.method === 'GET') {
       try {
-        const isTop = url.searchParams.get('top') === 'true';
-        const limit = parseInt(url.searchParams.get('limit') || '4', 10);
-        const search = url.searchParams.get('search') || undefined;
-        const bookTitle = url.searchParams.get('bookTitle') || undefined;
-        const sort = url.searchParams.get('sort') || undefined;
+        const db = getPrisma();
+        const isTop = parsedUrl.searchParams.get('top') === 'true';
+        const limit = parseInt(parsedUrl.searchParams.get('limit') || '4', 10);
+        const search = parsedUrl.searchParams.get('search') || undefined;
+        const bookTitle = parsedUrl.searchParams.get('bookTitle') || undefined;
+        const sort = parsedUrl.searchParams.get('sort') || undefined;
 
         let notes;
         if (isTop) {
@@ -1036,7 +1040,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         console.error('Error fetching margin notes:', err);
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Failed to fetch margin notes', details: err?.message }));
+        res.end(JSON.stringify({ error: err?.message || 'Failed to fetch margin notes', details: err?.message }));
       }
       return true;
     }
@@ -1044,6 +1048,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     // POST /api/margin-notes
     if (req.method === 'POST') {
       try {
+        const db = getPrisma();
         const body = await parseJsonBody(req);
         const { bookTitle, bookAuthor, passageSnippet, noteText, pageNumber, readerName, readerHandle, readerAvatar, userId } = body;
 
@@ -1100,16 +1105,16 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         console.error('Error creating margin note:', err);
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Failed to create margin note', details: err?.message }));
+        res.end(JSON.stringify({ error: err?.message || 'Failed to create margin note', details: err?.message }));
       }
       return true;
     }
   }
 
   // POST /api/margin-notes/like
-  if (url.pathname === '/api/margin-notes/like' && req.method === 'POST') {
-    const db = getPrisma();
+  if (pathname === '/api/margin-notes/like' && req.method === 'POST') {
     try {
+      const db = getPrisma();
       const body = await parseJsonBody(req);
       const { noteId, liked } = body;
 
@@ -1135,15 +1140,15 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
       console.error('Error liking margin note:', err);
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Failed to like note', details: err?.message }));
+      res.end(JSON.stringify({ error: err?.message || 'Failed to like note', details: err?.message }));
     }
     return true;
   }
 
   // POST /api/margin-notes/comment
-  if (url.pathname === '/api/margin-notes/comment' && req.method === 'POST') {
-    const db = getPrisma();
+  if (pathname === '/api/margin-notes/comment' && req.method === 'POST') {
     try {
+      const db = getPrisma();
       const body = await parseJsonBody(req);
       const { noteId, readerName, readerAvatar, text } = body;
 
@@ -1184,7 +1189,7 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
       console.error('Error adding comment:', err);
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Failed to add comment', details: err?.message }));
+      res.end(JSON.stringify({ error: err?.message || 'Failed to add comment', details: err?.message }));
     }
     return true;
   }
