@@ -10,9 +10,11 @@ interface AuthContextType {
   isSignedIn: boolean;
   isLoading: boolean;
   isAuthModalOpen: boolean;
+  authModalMode: 'sign-in' | 'sign-up';
   isProfileSetupOpen: boolean;
-  openAuthModal: () => void;
+  openAuthModal: (mode?: 'sign-in' | 'sign-up' | unknown) => void;
   closeAuthModal: () => void;
+  setAuthModalMode: (mode: 'sign-in' | 'sign-up') => void;
   openProfileSetup: () => void;
   closeProfileSetup: () => void;
   loginWithGoogle: () => void;
@@ -64,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'sign-in' | 'sign-up'>('sign-up');
   const [isProfileSetupOpen, setIsProfileSetupOpen] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
@@ -186,7 +189,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
-  const openAuthModal = () => setIsAuthModalOpen(true);
+  const openAuthModal = (mode?: 'sign-in' | 'sign-up' | unknown) => {
+    if (mode === 'sign-in' || mode === 'sign-up') {
+      setAuthModalMode(mode);
+    } else {
+      setAuthModalMode('sign-up');
+    }
+    setIsAuthModalOpen(true);
+  };
   const closeAuthModal = () => setIsAuthModalOpen(false);
 
   const openProfileSetup = () => setIsProfileSetupOpen(true);
@@ -416,9 +426,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isSignedIn: !!isSignedIn,
         isLoading: isLoadingProfile,
         isAuthModalOpen,
+        authModalMode,
         isProfileSetupOpen,
         openAuthModal,
         closeAuthModal,
+        setAuthModalMode,
         openProfileSetup,
         closeProfileSetup,
         loginWithGoogle,
