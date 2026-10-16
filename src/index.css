@@ -130,3 +130,38 @@
 .modal-scrollable::-webkit-scrollbar {
   width: 5px;
 }
+
+/* Clerk Auth Modal: prevent input and OTP block clipping */
+.clerk-auth-container .cl-cardBox,
+.clerk-auth-container .cl-card,
+.clerk-auth-container .cl-main,
+.clerk-auth-container .cl-form,
+.clerk-auth-container .cl-formFieldRow,
+.clerk-auth-container .cl-formFieldInputGroup,
+.clerk-auth-container .cl-otpCodeField,
+.clerk-auth-container .cl-otpCodeFieldInputs,
+.clerk-auth-container .cl-otpCodeFieldInputContainer {
+  overflow: visible !important;
+}
+
+.clerk-auth-container .cl-formFieldInput {
+  box-sizing: border-box !important;
+  margin-top: 2px !important;
+  margin-bottom: 2px !important;
+}
+
+.clerk-auth-container .cl-otpCodeFieldInputs {
+  overflow: visible !important;
+  display: flex !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  padding: 6px 0 !important;
+}
+
+.clerk-auth-container .cl-otpCodeFieldInput {
+  box-sizing: border-box !important;
+  width: 2.75rem !important;
+  height: 3rem !important;
+  margin: 2px !important;
+  line-height: normal !important;
+}
