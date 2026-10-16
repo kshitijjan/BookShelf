@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-15T20:12:34.730Z",
+  "timestamp": "2026-10-16T01:19:21.660Z",
   "baseUrl": "http://localhost:5173",
   "summary": {
     "total": 15,
@@ -12,7 +12,7 @@
       "suite": "Primary Routes",
       "name": "Route / (Home Page (Chapters I - V)) returns HTTP 200 with HTML",
       "status": "PASS",
-      "durationMs": 7.768957999999998,
+      "durationMs": 5.556166999999988,
       "details": {
         "status": 200,
         "bytes": 1499
@@ -22,7 +22,7 @@
       "suite": "Primary Routes",
       "name": "Route /books (Catalog Search & Browse Page) returns HTTP 200 with HTML",
       "status": "PASS",
-      "durationMs": 5.124709000000024,
+      "durationMs": 16.407292000000012,
       "details": {
         "status": 200,
         "bytes": 1499
@@ -32,7 +32,7 @@
       "suite": "Primary Routes",
       "name": "Route /shelf (Personal Reader Shelf Page) returns HTTP 200 with HTML",
       "status": "PASS",
-      "durationMs": 5.479749999999996,
+      "durationMs": 2.3831659999999886,
       "details": {
         "status": 200,
         "bytes": 1499
@@ -42,7 +42,7 @@
       "suite": "Primary Routes",
       "name": "Route /profile (Reader Sanctuary Profile Page) returns HTTP 200 with HTML",
       "status": "PASS",
-      "durationMs": 2.5282499999999857,
+      "durationMs": 2.0697079999999914,
       "details": {
         "status": 200,
         "bytes": 1499
@@ -52,7 +52,7 @@
       "suite": "Core API",
       "name": "GET /api/books/daily returns structured catalog with books array",
       "status": "PASS",
-      "durationMs": 5.168915999999996,
+      "durationMs": 5.63941699999998,
       "details": {
         "bookCount": 30,
         "dateKey": "2026-10-16"
@@ -62,7 +62,7 @@
       "suite": "Core API",
       "name": "GET /api/margin-notes returns community notes list",
       "status": "PASS",
-      "durationMs": 759.0421670000001,
+      "durationMs": 2316.608041,
       "details": {
         "noteCount": 50
       }
@@ -71,7 +71,7 @@
       "suite": "Core API",
       "name": "GET /api/cover-proxy with valid cover URL streams image asset",
       "status": "PASS",
-      "durationMs": 1.7941659999999047,
+      "durationMs": 2.7407499999999345,
       "details": {
         "contentType": "image/jpeg",
         "bytes": 5596
@@ -81,7 +81,7 @@
       "suite": "Core API",
       "name": "POST /api/archivist/consult returns 3 recommendations and cached property",
       "status": "PASS",
-      "durationMs": 7.902707999999961,
+      "durationMs": 6.206833999999617,
       "details": {
         "recommendationsCount": 3,
         "cached": true,
@@ -92,9 +92,9 @@
       "suite": "Margin Notes",
       "name": "POST /api/margin-notes succeeds with { bookTitle, bookAuthor, noteText } without page numbers",
       "status": "PASS",
-      "durationMs": 497.38258399999995,
+      "durationMs": 509.7362079999998,
       "details": {
-        "noteId": "c69919e0-6641-40e6-b836-fd9c95a7061a",
+        "noteId": "5a68339f-9076-44d2-abd9-f9c643f4ee2b",
         "title": "Meditations of Aurelius"
       }
     },
@@ -102,7 +102,7 @@
       "suite": "Margin Notes",
       "name": "POST /api/margin-notes with empty payload returns HTTP 400",
       "status": "PASS",
-      "durationMs": 1.6616669999998521,
+      "durationMs": 2.0650839999998425,
       "details": {
         "status": 400
       }
@@ -111,7 +111,7 @@
       "suite": "Cover Proxy",
       "name": "GET /api/cover-proxy with failing upstream URL returns high-fidelity parchment SVG placeholder (not plain text 502/404)",
       "status": "PASS",
-      "durationMs": 1.052375000000211,
+      "durationMs": 0.6733749999998508,
       "details": {
         "status": 400,
         "contentType": "image/svg+xml",
@@ -122,7 +122,7 @@
       "suite": "Cover Proxy",
       "name": "GET /api/cover-proxy without url parameter returns HTTP 400",
       "status": "PASS",
-      "durationMs": 0.6417080000001079,
+      "durationMs": 0.34895800000003874,
       "details": {
         "status": 400
       }
@@ -131,9 +131,9 @@
       "suite": "Cache Benchmark",
       "name": "Repeat POST /api/archivist/consult resolves in < 20ms with cached === true",
       "status": "PASS",
-      "durationMs": 2.310916000000134,
+      "durationMs": 0.857915999999932,
       "details": {
-        "latencyMs": 2.02,
+        "latencyMs": 0.71,
         "cached": true,
         "slaTargetMs": 20
       }
@@ -142,9 +142,9 @@
       "suite": "Cache Benchmark",
       "name": "Whitespace and punctuation normalized query hits in-memory cache with cached === true",
       "status": "PASS",
-      "durationMs": 1.8109580000000278,
+      "durationMs": 1.0519999999996799,
       "details": {
-        "latencyMs": 1.53,
+        "latencyMs": 0.9,
         "cached": true
       }
     },
@@ -152,10 +152,10 @@
       "suite": "User Flow",
       "name": "Complete lifecycle: Consult -> Inscribe Note -> Query Shelf -> Check Profile",
       "status": "PASS",
-      "durationMs": 4492.2625,
+      "durationMs": 4670.657959,
       "details": {
         "success": true,
-        "user": "audit_user_1792095150709",
+        "user": "audit_user_1792113557492",
         "bookAdded": "The Unbearable Lightness of Being"
       }
     }
@@ -166,44 +166,44 @@
       "samples": 10,
       "successful": 10,
       "failed": 0,
-      "min": 0.72,
-      "p50": 1.05,
-      "p95": 4.05,
-      "max": 4.05,
-      "avg": 1.34
+      "min": 0.5,
+      "p50": 0.66,
+      "p95": 0.8,
+      "max": 0.8,
+      "avg": 0.63
     },
     {
       "endpoint": "GET /api/books/daily",
       "samples": 10,
       "successful": 10,
       "failed": 0,
-      "min": 0.41,
-      "p50": 0.48,
-      "p95": 1.02,
-      "max": 1.02,
-      "avg": 0.56
+      "min": 0.36,
+      "p50": 0.52,
+      "p95": 1.34,
+      "max": 1.34,
+      "avg": 0.64
     },
     {
       "endpoint": "GET /api/margin-notes",
       "samples": 10,
       "successful": 10,
       "failed": 0,
-      "min": 481.12,
-      "p50": 493.94,
-      "p95": 549.92,
-      "max": 549.92,
-      "avg": 497.81
+      "min": 495.8,
+      "p50": 510.4,
+      "p95": 521.95,
+      "max": 521.95,
+      "avg": 507.64
     },
     {
       "endpoint": "GET /api/cover-proxy (fallback)",
       "samples": 10,
       "successful": 10,
       "failed": 0,
-      "min": 0.26,
-      "p50": 0.38,
-      "p95": 0.7,
-      "max": 0.7,
-      "avg": 0.39
+      "min": 0.29,
+      "p50": 0.36,
+      "p95": 0.53,
+      "max": 0.53,
+      "avg": 0.38
     }
   ]
 }
